@@ -22,7 +22,9 @@
 3. 自动根据cpu数量设置线程个数<br/>
 4. 支持windows和Linux。其中windows只支持select。Linux支持select和epoll，默认为epoll方式<br/>
 5. FakeProtocol 是针对包直接进行转发。<br/>
+更多特性关键：https://github.com/onexsoft/oneproxy-monitor/wiki
 
 目前平民软件基于此架构已经提供sql server， postgresql的监控功能。<br/>
 监控效果可以看在线的mysql的监控效果：http://www.onexsoft.com:8080/<br/>
 更多信息，请访问我们的官网：http://www.onexsoft.com 或者加入群：数据库监控 521095285。<br/>
+
