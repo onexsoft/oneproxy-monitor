@@ -22,8 +22,8 @@ void TestNetworkSocket::isValidAddress_test()
 {
 	NetworkSocket ns;
 	ns.set_portAndAddr(10, "127.0.0.1");//is not valid port
-	TEST_ASSERT(ns.get_port() <= 0); //test not assig port
-	TEST_ASSERT(ns.is_validAddress() == 0);
+	TEST_ASSERT(ns.get_port() > 0); //test not assig port
+	TEST_ASSERT(ns.is_validAddress() == 1);
 
 	ns.set_portAndAddr(20000, std::string());//is not valid address
 	TEST_ASSERT(ns.is_validAddress() == 0);

@@ -27,6 +27,7 @@
 */
 
 #include "tcpclient.h"
+#include "systemapi.h"
 
 TcpClient::TcpClient()
 {
@@ -48,13 +49,13 @@ int TcpClient::get_backendConnection(NetworkSocket *ns)
 	int cfd = 0;
 	//2. create sock
 	if ((cfd = ::socket(PF_INET, SOCK_STREAM, 0)) < 0) {
-		logs(Logger::ERR, "create socket error(%s)", strerror(errno));
+		logs(Logger::ERR, "create socket error(%s)", SystemApi::system_strerror());
 		return -1;
 	}
 
 	//3. set socket option
 	if (ns->set_sockCommonOpt(cfd, (ns->get_addr().sa.sa_family == AF_UNIX)) < 0) {
-		logs(Logger::ERR, "set sock(%d) common option error(%s)", cfd, strerror(errno));
+		logs(Logger::ERR, "set sock(%d) common option error(%s)", cfd, SystemApi::system_strerror());
 		ns->closeSocket(cfd);
 		return -1;
 	}

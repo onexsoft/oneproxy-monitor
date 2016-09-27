@@ -9,6 +9,7 @@
 #include "testlogger.h"
 #include "testnetworksocket.h"
 #include "teststringbuf.h"
+#include "testtcpclient.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -70,9 +71,10 @@ int main(int argc, char* argv[])
 {
 	try {
 		Test::Suite ts;
-		ts.add(auto_ptr<Test::Suite>(new TestLogger));
-		ts.add(auto_ptr<Test::Suite>(new TestNetworkSocket));
-		ts.add(auto_ptr<Test::Suite>(new TestStringBuf));
+		//ts.add(auto_ptr<Test::Suite>(new TestLogger));
+		//ts.add(auto_ptr<Test::Suite>(new TestNetworkSocket));
+		//ts.add(auto_ptr<Test::Suite>(new TestStringBuf));
+		ts.add(auto_ptr<Test::Suite>(new TestTcpClient));
 
 		auto_ptr<Test::Output> output(cmdline(argc, argv));
 		ts.run(*output, true);
@@ -86,6 +88,8 @@ int main(int argc, char* argv[])
 		cout << "unexpected exception encountered\n";
 		return EXIT_FAILURE;
 	}
+
+//	system("pause");
 
 	return EXIT_SUCCESS;
 }

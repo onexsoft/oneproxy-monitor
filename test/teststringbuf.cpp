@@ -59,8 +59,10 @@ void TestStringBuf::log_insert()
 void TestStringBuf::log_appendFormat()
 {
 	StringBuf sb;
-	sb.appendFormat("%s %d %s %lld %s", "hello world", 123, "kkkkkk", 1234567, "ssssss");
+	memset(sb.addr(), 0, sb.get_allocateLen());
+	sb.appendFormat("%s %d %s %d %s", "hello world", 123, "kkkkkk", 1234567, "ssssss");
 	logs(Logger::ERR, "sb.buf: %s", sb.addr());
+	TEST_ASSERT(true);
 }
 
 void TestStringBuf::log_erase()

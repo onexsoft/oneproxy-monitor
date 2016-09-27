@@ -58,8 +58,6 @@ void ClientThread::set_stop()
 
 int ClientThread::add_task(NetworkSocket* ns)
 {
-
-
 	Connection *conn = new Connection();
 	conn->createConnTime = SystemApi::system_millisecond();
 
@@ -133,7 +131,6 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 
 void ClientThread::finished_connection(Connection *con)
 {
-
 	NetworkSocket *cns = con->clins;
 	NetworkSocket *sns = con->servns;
 
@@ -333,7 +330,7 @@ void ClientThread::write_data(Connection& con, bool isFront)
 	uif (sendData.get_remailLength() <= 0 && data.get_remailLength() <= 0)
 		return;
 
-	do{
+	do {
 		//先写上次没有发送完毕的数据
 		uif (sendData.get_remailLength() > 0) {
 			logs(Logger::INFO, "send data : %d", sendData.get_remailLength());
