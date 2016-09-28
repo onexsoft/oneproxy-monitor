@@ -34,6 +34,7 @@
 #include <vector>
 #include <list>
 #include <set>
+#include <strings.h>
 
 #include "logger.h"
 #include "mutexlock.h"

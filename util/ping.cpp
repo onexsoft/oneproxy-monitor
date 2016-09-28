@@ -114,7 +114,7 @@ void Ping::fill_icmpData(char * icmp_data, int datasize){
 
 int Ping::ping(const char* pingAddress, int tryTimes, int packetSize)
 {
-	SystemSocket sockRaw = -1;
+	SystemSocket sockRaw = 0;
 	struct sockaddr_in dest,from;
 	struct hostent * hp;
 	int bread, datasize;
@@ -129,7 +129,7 @@ int Ping::ping(const char* pingAddress, int tryTimes, int packetSize)
 		sockRaw = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP); ////创建套接字
 		if ((int)sockRaw <= 0) {
 			logs(Logger::ERR, "create socket error(%s)", SystemApi::system_strerror());
-			sockRaw = -1;
+			sockRaw = 0;
 			ret =  -1;
 			break;
 		}
@@ -237,7 +237,5 @@ int Ping::ping(const char* pingAddress, int tryTimes, int packetSize)
 	if (sockRaw > 0) {
 		SystemApi::close(sockRaw);
 	}
-//	SystemApi::clear_networkEnv();
-
 	return ret;
 }

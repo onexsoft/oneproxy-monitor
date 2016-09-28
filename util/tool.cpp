@@ -200,6 +200,7 @@ int Tool::stringbuf_vsnprintf(char *buf, size_t buflen, const char *format, va_l
 	int r;
 	if (!buflen)
 		return 0;
+
 #if defined(_MSC_VER) || defined(WIN32)
 	r = _vsnprintf(buf, buflen, format, ap);
 	if (r < 0)

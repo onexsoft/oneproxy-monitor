@@ -1,34 +1,44 @@
 BUILD = build
-INSTALLDIR = /usr/local/superoneproxy/
 
-CXXFLAGS = -O2 -g -Wall -Wformat=0 -Wno-strict-aliasing
-APPSOURCEDIR = ./sql/ \
-			   ./util/ \
-				./conf/ \
-				./stats/ \
-				./httpserver/ \
-				./iomultiplex/ \
-				./protocol/ \
-				./protocol/fake/ \
-				./protocol/sqlserver/ \
-				./protocol/postgresql/
+ifeq ($(LANG),) #windows
+	INSTALLDIR = $(BUILD)
+	LDFLAGS = -static-libgcc -static-libstdc++
+	LIBS = -lwsock32 -lwinmm
+else #linux
+	INSTALLDIR = /usr/local/superoneproxy/
+	LDFLAGS = 
+	LIBS = -pthread ./libtcmalloc_minimal.a ./stats/libsqlite3.a
+endif
+
+CXXFLAGS = -O2 -Wall -Wformat=0 -Wno-strict-aliasing
+
+APPSOURCEDIR = ./sql \
+			   ./util \
+				./conf \
+				./stats \
+				./httpserver \
+				./iomultiplex \
+				./protocol \
+				./protocol/fake \
+				./protocol/sqlserver \
+				./protocol/postgresql
 
 TESTSOURCEDIR = ./test/ ./unittest/
 
 SOURCEDIR = $(TESTSOURCEDIR) $(APPSOURCEDIR)
 
 VPATH = ./
-VPATH += $(foreach dir, $(SOURCEDIR), :$(dir))
+VPATH += $(foreach tdir, $(SOURCEDIR), :$(tdir))
 
 DIR = -I./.
-DIR += $(foreach dir, $(SOURCEDIR), -I$(dir))
+DIR += $(foreach tdir, $(SOURCEDIR), -I$(tdir))
 
 MAIN_SOURCES = main.cpp
 
 SOURCES = $(filter-out $(MAIN_SOURCES), $(wildcard *.cpp))
-SOURCES += $(foreach dir, $(APPSOURCEDIR), $(filter-out $(MAIN_SOURCES), $(wildcard $(dir)/*.cpp)))
+SOURCES += $(foreach tdir, $(APPSOURCEDIR), $(filter-out $(MAIN_SOURCES), $(wildcard $(tdir)/*.cpp)))
 HEADERS = $(wildcard ./*.h)
-HEADERS += $(foreach dir, $(APPSOURCEDIR), $(wildcard $(dir)/*.h))
+HEADERS += $(foreach tdir, $(APPSOURCEDIR), $(wildcard $(tdir)/*.h))
 
 ifeq ($(MAKECMDGOALS), )
 	SOURCES += $(MAIN_SOURCES)
@@ -39,12 +49,6 @@ else ifeq ($(MAKECMDGOALS), test)
 	HEADERS += $(wildcard test/*.h) $(wildcard unittest/*.h)
 endif
 OBJS =	 $(patsubst %.cpp, $(BUILD)/%.o, $(notdir $(SOURCES)))
-
-ifeq ($(LANG),)
-LIBS = -lwsock32 -lwinmm
-else
-LIBS = -pthread ./libtcmalloc_minimal.a ./stats/libsqlite3.a
-endif
 
 ifeq ($(MAKECMDGOALS), test)
 	ifeq ($(LANG),)
@@ -64,11 +68,10 @@ endif
 all: $(TARGET)
 
 $(OBJS): $(BUILD)/%.o: %.cpp
-	@mkdir -p $(BUILD)
 	$(CXX) $(CXXFLAGS) -c $(DIR) $< -o $@
 	
 $(TARGET):	$(OBJS)
-	$(CXX) -o $(TARGET) $(OBJS) $(LIBS)
+	$(CXX) $(LDFLAGS) -o $(TARGET) $(OBJS) $(LIBS) 
 
 .PHONY: test
 test: $(TARGET)
@@ -81,5 +84,5 @@ install:
 	@cp -rf conf/config.h $(INSTALLDIR)/include/conf/
 
 clean:
-	rm -rf $(BUILD)
-	rm -f $(OBJS) $(TARGET) $(TEST_OBJS)
+	@rm -rf $(BUILD)
+	@mkdir $(BUILD)

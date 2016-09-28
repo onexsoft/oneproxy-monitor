@@ -422,11 +422,11 @@ void MachineStatus::getOSLoadRecord(OSLoadData *os1, OSLoadData *os2, OSLoadReco
      rec->run  = os2->la.procrun;
      rec->num  = os2->la.procnum;
 
-     rec->user = (100 * duser / dtotal);
-     rec->system = (100 * dsystem / dtotal);
-     rec->iowait = (100 * diowait / dtotal);
-     rec->irq    = (100 * dirq / dtotal);
-     rec->softirq= (100 * dsoftirq / dtotal);
+     rec->user = (int)(100 * duser / dtotal);
+     rec->system = (int)(100 * dsystem / dtotal);
+     rec->iowait = (int)(100 * diowait / dtotal);
+     rec->irq    = (int)(100 * dirq / dtotal);
+     rec->softirq= (int)(100 * dsoftirq / dtotal);
 
      rec->irqcall=intDouble(os1->ci.irqcall , os2->ci.irqcall);
 
@@ -448,10 +448,10 @@ void MachineStatus::getOSLoadRecord(OSLoadData *os1, OSLoadData *os2, OSLoadReco
 
      rec->ibytes = intDouble(os1->nt.ibytes , os2->nt.ibytes);
      rec->ipackets = intDouble(os1->nt.ipackets , os2->nt.ipackets);
-     rec->ierrors = os2->nt.ierrs - os1->nt.ierrs;
+     rec->ierrors = (int)(os2->nt.ierrs - os1->nt.ierrs);
      rec->obytes = intDouble(os1->nt.obytes , os2->nt.obytes);
      rec->opackets = intDouble(os1->nt.opackets , os2->nt.opackets);
-     rec->oerrors = os2->nt.oerrs - os1->nt.oerrs;
+     rec->oerrors = (int)(os2->nt.oerrs - os1->nt.oerrs);
 
      if (os2->fnr.nrtotal != 0) {
     	 rec->nr = 100 * os2->fnr.nropen / os2->fnr.nrtotal;

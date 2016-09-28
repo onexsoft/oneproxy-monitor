@@ -1269,15 +1269,14 @@ void HttpResponse::gen_tableTitle(const TableTitleInfoVec& titleInfo, UriParam& 
 				http.outputBuf.appendFormat(" Total: %d rows", totalItem);
 			}
 			http.outputBuf.append(")");
+
+			//calc sum page
+			unsigned int tpage = totalItem / httpServerConfig.pageSize;
+			unsigned int totalPage = totalItem % httpServerConfig.pageSize == 0 ? tpage : tpage + 1;
+			if (totalPage > uriParam.currentPage)
+				http.outputBuf.appendFormat("<a href='%sfd=%s&orderby=%d&page=%d'>Next</a>",
+						baseUri.c_str(), uriParam.orderField.c_str(), uriParam.orderBy, uriParam.currentPage + 1);
 		}
-
-		//calc sum page
-		unsigned int tpage = totalItem / httpServerConfig.pageSize;
-		unsigned int totalPage = totalItem % httpServerConfig.pageSize == 0 ? tpage : tpage + 1;
-		if (totalPage > uriParam.currentPage)
-			http.outputBuf.appendFormat("<a href='%sfd=%s&orderby=%d&page=%d'>Next</a>",
-					baseUri.c_str(), uriParam.orderField.c_str(), uriParam.orderBy, uriParam.currentPage + 1);
-
 		http.outputBuf.append("</caption>");
 
 	}
