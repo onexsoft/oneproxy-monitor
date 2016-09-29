@@ -65,6 +65,7 @@ class DataBase: public ConfigBase{
 	declare_class_member(unsigned int, frontPort)//当为0时，前端数据都可以发送到这个数据库
 	declare_class_member(std::string, className)
 	declare_class_member(std::string, companyName)
+	declare_class_member(int, priority) //数据库的优先级，优先级高的，先进行协议匹配. 要求优先级必须大于等于0，并且数字越大越优先
 
 	declare_cvt_func(cvtString)
 	declare_cvt_func(cvtInt)
@@ -75,7 +76,8 @@ public:
 		m_port(port),
 		m_frontPort(0),
 		m_className(className),
-		m_companyName(companyName)
+		m_companyName(companyName),
+		m_priority(0)
 	{
 
 	}
@@ -84,6 +86,9 @@ public:
 		if (this->m_addr.length() > 0 && this->m_port > 0 && this->m_className.length() > 0)
 			return true;
 		return false;
+	}
+	static bool sort_database(DataBase a, DataBase b) {
+		return a.get_priority() > b.get_priority();
 	}
 };
 
@@ -120,7 +125,7 @@ private:
 	void default_config();
 	void print_config();
 	void handle_ports();
-	int verify_config();
+	int handle_config();
 
 public:
 	static Config* get_config();

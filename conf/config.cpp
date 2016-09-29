@@ -111,17 +111,17 @@ Config::Config()
 #undef add_oneproxyConfig
 
 #define add_dbConfig(db, key, defaultv, cvtf, setf) add_config(db, key, defaultv, (CVTFunc)cvtf, (SetFunc)setf)
-	//增加一个fake数据处理对象
+	//增加一个fake数据处理对象,此不能删除
 	std::vector<ConfigKeyValue> fakedb;
 	add_dbConfig(fakedb, "host", "127.0.0.1", &DataBase::cvtString, &DataBase::set_addr);
 	add_dbConfig(fakedb, "port", "1433", &DataBase::cvtInt, &DataBase::set_port);
 	add_dbConfig(fakedb, "frontPort", "0", &DataBase::cvtInt, &DataBase::set_frontPort);
 	add_dbConfig(fakedb, "className", "FakeProtocol", &DataBase::cvtString, &DataBase::set_className);
 	add_dbConfig(fakedb, "companyName", "fake database", &DataBase::cvtString, &DataBase::set_companyName);
+	add_dbConfig(fakedb, "priority", "-999", &DataBase::cvtInt, &DataBase::set_priority);
 	this->dbinfocfg.push_back(fakedb);
 
 	//如果需要增加其他的数据库，则只需要重复fake database的部分即可。
-
 	//add sql server default config.
 	std::vector<ConfigKeyValue> sqlserver;
 	add_dbConfig(sqlserver, "host", "127.0.0.1", &DataBase::cvtString, &DataBase::set_addr);
@@ -129,14 +129,17 @@ Config::Config()
 	add_dbConfig(sqlserver, "frontPort", "0", &DataBase::cvtInt, &DataBase::set_frontPort);
 	add_dbConfig(sqlserver, "className", "SSProtocol", &DataBase::cvtString, &DataBase::set_className);
 	add_dbConfig(sqlserver, "companyName", "sql server", &DataBase::cvtString, &DataBase::set_companyName);
+	add_dbConfig(sqlserver, "priority", "0", &DataBase::cvtInt, &DataBase::set_priority);
 	this->dbinfocfg.push_back(sqlserver);
 
+	//add postgresql database default config.
 	std::vector<ConfigKeyValue> pgserver;
 	add_dbConfig(pgserver, "host", "127.0.0.1", &DataBase::cvtString, &DataBase::set_addr);
 	add_dbConfig(pgserver, "port", "5432", &DataBase::cvtInt, &DataBase::set_port);
 	add_dbConfig(pgserver, "frontPort", "0", &DataBase::cvtInt, &DataBase::set_frontPort);
 	add_dbConfig(pgserver, "className", "PGProtocol", &DataBase::cvtString, &DataBase::set_className);
 	add_dbConfig(pgserver, "companyName", "postgresql", &DataBase::cvtString, &DataBase::set_companyName);
+	add_dbConfig(pgserver, "priority", "0", &DataBase::cvtInt, &DataBase::set_priority);
 	this->dbinfocfg.push_back(pgserver);
 #undef add_dbConfig
 }
@@ -203,9 +206,9 @@ void Config::print_config()
 
 	std::vector<DataBase>::iterator it = dbvector.begin();
 	for (; it != dbvector.end(); ++it) {
-		logs(Logger::INFO, "addr: %s, port: %d, frontPort: %d, className: %s, companyName: %s",
+		logs(Logger::INFO, "addr: %s, port: %d, frontPort: %d, className: %s, companyName: %s, priority: %d",
 				it->get_addr().c_str(), it->get_port(), it->get_frontPort(),
-				it->get_className().c_str(), it->get_companyName().c_str());
+				it->get_className().c_str(), it->get_companyName().c_str(), it->get_priority());
 	}
 }
 
@@ -234,7 +237,7 @@ void Config::handle_ports()
 	} while(1);
 }
 
-int Config::verify_config()
+int Config::handle_config()
 {
 	unsigned int limitFiles = 0;
 	if (SystemApi::system_limitFileNum(limitFiles)) {
@@ -254,6 +257,10 @@ int Config::verify_config()
 	if (this->get_threadNum() <= 0 && cpuNum > 0) {
 		this->set_threadNum(cpuNum);
 	}
+
+	//排序到dbvector的协议调用顺序
+	std::sort(this->dbvector.begin(), this->dbvector.end(), DataBase::sort_database);
+
 	return 0;
 }
 
@@ -432,7 +439,7 @@ int Config::handle_args(int argc, char* argv[])
 
 	//处理多个端口号的情况。
 	this->handle_ports();
-	if (this->verify_config()) {
+	if (this->handle_config()) {
 		logs(Logger::ERR, "verify config error");
 		return -1;
 	}
@@ -514,8 +521,12 @@ int Config::loadConfig(std::string filePath)
 				} else {
 					value = (char*)ini.GetValue((const char*)sit->pItem, (*dbit).key.c_str(), (const char*)"");
 				}
+
 				CVTFunc func = (*dbit).cvtFunc;
 				(db.*func)(std::string(value), (*dbit));
+			}
+			uif (db.get_priority() < 0) {//从配置读取的优先级不能小于0.
+				db.set_priority(0);
 			}
 			this->set_database(db);
 		}
