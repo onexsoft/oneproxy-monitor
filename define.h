@@ -70,6 +70,7 @@ const int cf_listen_backlog = 128;
 #define likely(x) __builtin_expect(!!(x), 1)
 #define uif(x) if (unlikely(x))
 #define lif(x) if (likely(x))
+#define assert(x) uif(!(x)){logs(Logger::FATAL, "assert %s failed", #x);}
 
 #define forrange(var, start, end) for(var = start; var < end; ++var)
 

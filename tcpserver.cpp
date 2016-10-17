@@ -147,24 +147,20 @@ int TcpServer::create_listenSocket(NetworkSocket& ns, int af, const struct socka
 	return 0;
 }
 
-void TcpServer::accept_connect(unsigned int fd, unsigned int events, void *args)
+NetworkSocket* TcpServer::accept_connect(unsigned int sfd)
 {
-	TcpServer *ts = (TcpServer*)args;
-	if (ts == NULL)
-		return;
-
 	struct sockaddr client_addr;
 	socklen_t client_addr_len = sizeof(client_addr);
 	int cfd = 0;
-	if ((cfd = accept(fd, &client_addr, &client_addr_len)) < 0) {
-		logs(Logger::ERR, "call accept error(%s)", strerror(errno));
-		return;
+	if ((cfd = accept(sfd, &client_addr, &client_addr_len)) < 0) {
+		logs(Logger::ERR, "call accept error(%s)", SystemApi::system_strerror());
+		return NULL;
 	}
 
 	uif(SystemApi::system_setSockNonblocking(cfd, true)) {
-		logs(Logger::ERR, "set socket(%d) non blocking error", cfd);
+		logs(Logger::ERR, "set socket(%d) non blocking error(%s)", cfd, SystemApi::system_strerror());
 		SystemApi::close(cfd);
-		return ;
+		return NULL;
 	}
 
 	NetworkSocket *clientSocket = new NetworkSocket();
@@ -172,12 +168,27 @@ void TcpServer::accept_connect(unsigned int fd, unsigned int events, void *args)
 	clientSocket->addr_assign(&client_addr);
 	clientSocket->addr_ntop();
 	clientSocket->set_fd(cfd);
-	clientSocket->get_attachData().set_listenPort(ts->fdPortMap[fd]);
+	clientSocket->get_attachData().set_listenPort(this->fdPortMap[sfd]);
 
 	logs(Logger::INFO, "accept client fd(%d) address (%s) port(%d) listenPort(%d)", cfd,
 			clientSocket->get_address().c_str(), clientSocket->get_port(),
 			clientSocket->get_attachData().get_listenPort());
 
+	return clientSocket;
+}
+
+void TcpServer::accept_connect(unsigned int fd, unsigned int events, void *args)
+{
+	TcpServer *ts = (TcpServer*)args;
+	uif (ts == NULL)
+		return;
+
+	NetworkSocket *clientSocket = ts->accept_connect(fd);
+	uif (clientSocket == NULL) {
+		logs(Logger::ERR, "accept client error");
+		return;
+	}
 	ts->accept_clientRequest(clientSocket);
 }
+
 

@@ -325,6 +325,38 @@ int NetworkSocket::read_data()
 	return 0;
 }
 
+int NetworkSocket::read_dataonBlock()
+{
+	unsigned int dataLen = 0;
+	while(true) {
+		if (system_ioctl(this->m_fd, FIONREAD, (unsigned long int*)&dataLen)) {//fd maybe closed
+			logs(Logger::ERR, "fd(%d) ioctl FIONREAD error", this->m_fd);
+			return -1;
+		}
+		if (dataLen <= 0) {
+			SystemApi::system_sleep(50);
+			continue;
+		}
+
+		this->m_recvData.reallocMem(this->m_recvData.get_length() + dataLen);
+		int len = recv(this->m_fd, (char*)(this->m_recvData.addr() + this->m_recvData.length()), dataLen, 0);
+		if (len == -1) {
+			errno = SystemApi::system_errno();
+			if (errno == EAGAIN || errno == EINTR) {
+				SystemApi::system_sleep(50);
+				continue;
+			}
+			logs(Logger::ERR, "recv data from fd(%d) error(%d:%s)",
+					this->m_fd, errno, SystemApi::system_strerror(errno));
+			return -1;
+		}
+		this->m_recvData.set_length(this->m_recvData.length() + len);
+		break;
+	}
+	return 0;
+}
+
+
 int NetworkSocket::write_data(StringBuf& buf)
 {
 	uif (buf.get_remailLength() <= 0) {

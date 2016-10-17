@@ -52,7 +52,9 @@ public:
 private:
 	int create_servers();
 	int create_listenSocket(NetworkSocket& ns, int af, const struct sockaddr *sa, int salen);
+	NetworkSocket* accept_connect(unsigned int sfd);
 	static void accept_connect(unsigned int fd, unsigned int events, void* args);
+
 private:
 	std::vector<NetworkSocket> servSct;
 	std::map<unsigned int, unsigned int> fdPortMap;

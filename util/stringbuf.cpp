@@ -46,27 +46,38 @@ StringBuf::StringBuf()
 	this->m_buf = NULL;
 }
 
+StringBuf::StringBuf(StringBuf const& sb)
+{
+	this->m_offset = sb.m_offset;
+	this->m_buf = (char*)MemManager::malloc(sb.m_allocateLen);
+	uif (this->m_buf == NULL)
+		return;
+	memmove(this->m_buf, sb.m_buf, sb.m_length);
+	this->m_length = sb.m_length;
+	this->m_allocateLen = sb.m_allocateLen;
+}
+
 StringBuf::~StringBuf() {
 	if (this->m_buf != NULL) {
 		MemManager::free(this->m_buf);
 	}
 }
 
-void StringBuf::reallocMem(unsigned int size)
+int StringBuf::reallocMem(unsigned int size)
 {
-	if (this->m_allocateLen >= size)
-		return;
+	if (this->m_allocateLen >= size)//memory sufficient
+		return 0;
 
 	this->m_allocateLen = this->alignment(size);
 	char* tmpbuf = (char*)MemManager::malloc(this->m_allocateLen);
 	uif (tmpbuf == NULL) {
 		logs(Logger::ERR, "malloc(%d) error", this->m_allocateLen);
-		return;
+		return -1;
 	}
 
-	uif(this->m_length > this->m_allocateLen) {
+	uif(this->m_length > this->m_allocateLen) {//error
 		logs(Logger::ERR, "m_length(%u) > m_allocateLen(%u), don't memmove", this->m_length, this->m_allocateLen);
-		return;
+		return -1;
 	}
 	memmove((void*)tmpbuf, (const void*)this->m_buf, this->m_length);
 	lif (this->m_buf) {
@@ -74,6 +85,7 @@ void StringBuf::reallocMem(unsigned int size)
 		this->m_buf = NULL;
 	}
 	this->m_buf = tmpbuf;
+	return 0;
 }
 
 void StringBuf::mallocMem(unsigned int size)

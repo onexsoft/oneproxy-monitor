@@ -29,6 +29,7 @@
 #include "logger.h"
 #include "systemapi.h"
 #include "memmanager.h"
+#include "convertutf.h"
 
 #include <iostream>
 #include <string.h>
@@ -94,37 +95,165 @@ unsigned int Tool::quick_hash_code(const char* data , const int len)
 	return hash;
 }
 
-int Tool::unicode2string(const u_uint8* unicodeStr, const int len, std::string& desStr) {
-	if (len <= 0)
-		return 0;
-
-	if (len%2 != 0) {
-		return -1;
-	}
-
-	desStr.reserve(len/2+1);
-
-	int i = 0;
-	for (i = 0; i < len; i = i + 2) {
-		desStr.insert(i/2, 1, (char)((unicodeStr[i] & 0xff) | (unicodeStr[i+1] & 0xff) << 8));
-	}
-	desStr.insert(len/2, 1, (char)'\0');
-
-	return 0;
-}
-
-int Tool::ucs22string(const u_uint8* unicodeStr, const int len, std::string& desStr)
+int Tool::byte2string(const u_uint8* bdata, const unsigned int bdataLen, std::string& str)
 {
-	if (len <= 0)
+	if (bdataLen <= 0)
 		return 0;
-	if (len %2 != 0) {
+
+	if (bdataLen%2 != 0) {
 		return -1;
 	}
-	desStr.append((char*)unicodeStr, len);
-	desStr.insert(desStr.length(), 1, (char)'\0');
+
+	str.reserve(bdataLen/2 + 1);
+	unsigned int i = 0;
+	for (i = 0; i < bdataLen; i = i + 2) {
+		str.insert(i/2, 1, (char)((bdata[i] & 0xff) | (bdata[i+1] & 0xff) << 8));
+	}
 
 	return 0;
 }
+
+int Tool::string2byte(const std::string& str, StringBuf& bdata)
+{
+	bdata.reallocMem(bdata.get_length() + str.length() * 2);
+	for (unsigned int i = 0; i < str.length(); ++i) {
+		char ch = (char)(*(str.c_str() + i));
+		bdata.addr()[bdata.get_length() + i * 2] = (u_uint8)(ch & 0xff);
+		bdata.addr()[bdata.get_length() + i * 2 + 1] = (u_uint8)((ch >> 8) & 0xff);
+	}
+	bdata.set_length(bdata.get_length() + str.length() * 2);
+	return 0;
+}
+
+int Tool::byte2wstring(const u_uint8* bdata, const unsigned int bdataLen, std::wstring& wstr)
+{
+	if (bdataLen <= 0)
+		return 0;
+
+	if (bdataLen%2 != 0) {
+		return -1;
+	}
+
+	wstr.reserve(bdataLen/2 + 1);
+	unsigned int i = 0;
+	for (i = 0; i < bdataLen; i = i + 2) {
+		wstr.insert(i/2, 1, (wchar_t)((bdata[i] & 0x00ff) | (bdata[i+1] & 0x00ff) << 8));
+	}
+	return 0;
+}
+
+int Tool::wstring2byte(const std::wstring& wstr, StringBuf& bdata)
+{
+	bdata.reallocMem(bdata.get_length() + wstr.length() * 2);
+	for (unsigned int i = 0; i < wstr.length(); ++i) {
+		wchar_t ch = (wchar_t)(*(wstr.c_str() + i));
+		bdata.addr()[bdata.get_length() + i * 2] = (u_uint8)(ch & 0xff);
+		bdata.addr()[bdata.get_length() + i * 2 + 1] = (u_uint8)((ch >> 8) & 0xff);
+	}
+	bdata.set_length(bdata.get_length() + wstr.length() * 2);
+	return 0;
+}
+
+//int Tool::unicode2string(const u_uint8* unicodeStr, const int len, std::string& desStr) {
+//	if (len <= 0)
+//		return 0;
+//
+//	if (len%2 != 0) {
+//		return -1;
+//	}
+//
+//	desStr.reserve(len/2+1);
+//	int i = 0;
+//	for (i = 0; i < len; i = i + 2) {
+//		desStr.insert(i/2, 1, (char)((unicodeStr[i] & 0xff) | (unicodeStr[i+1] & 0xff) << 8));
+//	}
+//	desStr.insert(len/2, 1, (char)'\0');
+//
+//	return 0;
+//}
+
+//int Tool::unicode2string(StringBuf& srcBuf, StringBuf& desBuf)
+//{
+//	int len = srcBuf.get_remailLength();
+//	if (len <= 0)
+//		return 0;
+//
+//	if (len%2 != 0) {
+//		return -1;
+//	}
+//
+//	desBuf.reallocMem(desBuf.get_length() + len / 2);
+//	char* sbuf = (char*)(srcBuf.addr() + srcBuf.get_offset());
+//	char* tbuf = (char*)(desBuf.addr() + desBuf.get_length());
+//	int i = 0;
+//	for (i = 0; i < len; i = i + 2) {
+//		tbuf[i/2] = (char)((sbuf[i] & 0xff) | (sbuf[i+1] & 0xff) << 8);
+//	}
+//	return 0;
+//}
+
+//int Tool::string2unicode(const std::string& str, StringBuf& udata)
+//{
+//	udata.reallocMem(udata.get_length() + str.length() * 2);
+//	for (unsigned int i = 0; i < str.length(); ++i) {
+//		char ch = (char)(*(str.c_str() + i));
+//		udata.addr()[udata.get_length() + i * 2] = (u_uint8)(ch & 0xff);
+//		udata.addr()[udata.get_length() + i * 2 + 1] = (u_uint8)((ch >> 8) & 0xff);
+//	}
+//	udata.set_length(udata.get_length() + str.length() * 2);
+//	return 0;
+//}
+
+//int Tool::string2unicode(StringBuf& srcBuf, StringBuf& desBuf)
+//{
+//	desBuf.reallocMem(desBuf.get_length() + srcBuf.get_remailLength() * 2);
+//
+//	for (unsigned int i = srcBuf.get_offset(); i < srcBuf.get_length(); ++i) {
+//		char ch = (char)(*(srcBuf.addr() + i));
+//		desBuf.addr()[desBuf.get_length() + i * 2] = (u_uint8)(ch & 0xff);
+//		desBuf.addr()[desBuf.get_length() + i * 2 + 1] = (u_uint8)((ch >> 8) & 0xff);
+//	}
+//	desBuf.set_length(desBuf.get_length() + srcBuf.get_remailLength() * 2);
+//
+//	return 0;
+//}
+
+//int Tool::ucs22string(const u_uint8* unicodeStr, const int len, std::string& desStr)
+//{
+//	if (len <= 0)
+//		return 0;
+//	if (len %2 != 0) {
+//		return -1;
+//	}
+//
+//	logs_buf_force("unicodestr", (void*)unicodeStr, len);
+//	//UTF16 tstr[len/2] = {0};
+//	std::wstring tstr;
+//	int i = 0;
+//	for (i = 0; i < len; i = i + 2) {
+//		tstr.insert(i/2, 1, (wchar_t)((unicodeStr[i] & 0x00ff) | ((unicodeStr[i+1] & 0x00ff) << 8)));
+//	}
+//
+//	logs_buf_force("tstrunicodestr", (void*)tstr.c_str(), tstr.length() * 2);
+//
+//	uif(Tool::conv_utf16ToUtf8(tstr, desStr)) {
+//		logs(Logger::ERR, "utf16ToUtf8 error");
+//		return -1;
+//	}
+//	desStr.insert(desStr.length(), 1, '\0');
+//	logs(Logger::ERR, "desStr: %s", desStr.c_str());
+//	//tstr.insert(tstr.length(), 1, (wchar_t)'\0');
+////	StringBuf tb;
+////	tb.reallocMem(len);
+////	UTF8* ttb = (UTF8*)tb.addr();
+////	ConvertUTF16toUTF8((const UTF16**)&tstr, (const UTF16*)(tstr + len/2), (UTF8**)&ttb, (UTF8*)(ttb + tb.get_allocateLen()), strictConversion);
+////	logs(Logger::ERR, "tb: %s", tb.addr());
+//
+////	desStr.append((char*)unicodeStr, len);
+////	desStr.insert(desStr.length(), 1, (char)'\0');
+//
+//	return 0;
+//}
 
 std::string Tool::itoa(const int number)
 {

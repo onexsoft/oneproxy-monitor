@@ -108,6 +108,7 @@ public:
 	void set_portAndAddr(unsigned int port, std::string address);
 
 	int read_data();
+	int read_dataonBlock();
 	int write_data(StringBuf& buf);
 	void save_data(StringBuf& buf);
 	void closeSocket(unsigned int fd);

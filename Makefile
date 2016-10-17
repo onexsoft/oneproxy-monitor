@@ -1,16 +1,20 @@
 BUILD = build
+BUILD_TEST_BIN = utest
 
 ifeq ($(LANG),) #windows
 	INSTALLDIR = $(BUILD)
 	LDFLAGS = -static-libgcc -static-libstdc++
-	LIBS = -lwsock32 -lwinmm
+	LIBS = ./lib/win/libssl.a ./lib/win/libcrypto.a ./lib/win/libgdi32.a -lwsock32 -lwinmm
+	INCLUDE = -IC:\openssl-1.0.2e\win64\include
 else #linux
+$(shell if [ ! -d $(BUILD)/$(BUILD_TEST_BIN) ]; then mkdir -p $(BUILD)/$(BUILD_TEST_BIN); fi;)
 	INSTALLDIR = /usr/local/superoneproxy/
 	LDFLAGS = 
-	LIBS = -pthread ./libtcmalloc_minimal.a ./stats/libsqlite3.a
+	LIBS = -pthread ./libtcmalloc_minimal.a ./stats/libsqlite3.a ./lib/libssl.a ./lib/libcrypto.a -ldl
+	INCLUDE = -I/usr/local/openssl/include
 endif
 
-CXXFLAGS = -O2 -Wall -Wformat=0 -Wno-strict-aliasing
+CXXFLAGS = -Wall -Wformat=0 -Wno-strict-aliasing
 
 APPSOURCEDIR = ./sql \
 			   ./util \
@@ -32,6 +36,7 @@ VPATH += $(foreach tdir, $(SOURCEDIR), :$(tdir))
 
 DIR = -I./.
 DIR += $(foreach tdir, $(SOURCEDIR), -I$(tdir))
+DIR += $(INCLUDE)
 
 MAIN_SOURCES = main.cpp
 
@@ -40,21 +45,21 @@ SOURCES += $(foreach tdir, $(APPSOURCEDIR), $(filter-out $(MAIN_SOURCES), $(wild
 HEADERS = $(wildcard ./*.h)
 HEADERS += $(foreach tdir, $(APPSOURCEDIR), $(wildcard $(tdir)/*.h))
 
-ifeq ($(MAKECMDGOALS), )
-	SOURCES += $(MAIN_SOURCES)
-else ifeq ($(MAKECMDGOALS), all)
-	SOURCES += $(MAIN_SOURCES)
-else ifeq ($(MAKECMDGOALS), test)
+ifeq ($(MAKECMDGOALS), test)
 	SOURCES += $(wildcard test/*.cpp) $(wildcard unittest/*.cpp)
 	HEADERS += $(wildcard test/*.h) $(wildcard unittest/*.h)
+	CXXFLAGS += -Dprivate=public -Dprojected=public -g
+else
+	SOURCES += $(MAIN_SOURCES)
+	CXXFLAGS += -O2	
 endif
 OBJS =	 $(patsubst %.cpp, $(BUILD)/%.o, $(notdir $(SOURCES)))
 
 ifeq ($(MAKECMDGOALS), test)
 	ifeq ($(LANG),)
-	TARGET = $(BUILD)/unittest_main.exe
+	TARGET = $(BUILD)/$(BUILD_TEST_BIN)/unittest_main.exe
 	else
-	TARGET = $(BUILD)/unittest_main
+	TARGET = $(BUILD)/$(BUILD_TEST_BIN)/unittest_main
 	endif
 else
 	ifeq ($(LANG),)
@@ -70,8 +75,8 @@ all: $(TARGET)
 $(OBJS): $(BUILD)/%.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $(DIR) $< -o $@
 	
-$(TARGET):	$(OBJS)
-	$(CXX) $(LDFLAGS) -o $(TARGET) $(OBJS) $(LIBS) 
+$(TARGET): $(OBJS)
+	$(CXX) $(LDFLAGS) -o $(TARGET) $(OBJS) $(LIBS)
 
 .PHONY: test
 test: $(TARGET)
@@ -84,5 +89,6 @@ install:
 	@cp -rf conf/config.h $(INSTALLDIR)/include/conf/
 
 clean:
-	@rm -rf $(BUILD)
-	@mkdir $(BUILD)
+	-@rm $(BUILD)/*.o
+	-@rm $(TARGET)
+	-@rm $(BUILD)/$(BUILD_TEST_BIN)/*

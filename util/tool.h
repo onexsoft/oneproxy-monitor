@@ -30,15 +30,28 @@
 #define PROTOCOL_TOOL_H_
 
 #include "define.h"
+#include "stringbuf.h"
+
 #include <string>
 #include <stdarg.h>
 #include <iostream>
 
 class Tool{
 public:
+
 	static unsigned int quick_hash_code(const char* string, const int len);
-	static int unicode2string(const u_uint8* unicodeStr, const int len, std::string& desStr);
-	static int ucs22string(const u_uint8* unicodeStr, const int len, std::string& desStr);
+
+	static int byte2string(const u_uint8* bdata, const unsigned int bdataLen, std::string& str);
+	static int string2byte(const std::string& str, StringBuf& bdata);
+	static int byte2wstring(const u_uint8* bdata, const unsigned int bdataLen, std::wstring& wstr);
+	static int wstring2byte(const std::wstring& wstr, StringBuf& bdata);
+
+//	static int unicode2string(const u_uint8* unicodeStr, const int len, std::string& desStr);
+//	static int unicode2string(StringBuf& srcBuf, StringBuf& desBuf);
+//	static int string2unicode(const std::string& str, StringBuf& uData);
+//	static int string2unicode(StringBuf& srcBuf, StringBuf& desBuf);
+//	static int ucs22string(const u_uint8* unicodeStr, const int len, std::string& desStr);
+
 	static std::string itoa(const int number);
 
 	static char* format_string(const char* str, const unsigned int length);

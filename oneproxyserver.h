@@ -43,10 +43,17 @@ public:
 		this->stop = false;
 	}
 
-	OneproxyServer(ConnectManager* connectManager, int serverPort, std::string serverAddr)
+	OneproxyServer(ConnectManager* connectManager, std::string serverAddr,  int serverPort)
 		:TcpServer(serverAddr, serverPort)
 	{
 		this->connectManager = connectManager;
+		this->stop = false;
+	}
+
+	OneproxyServer(std::string serverAddr, int serverPort)
+		:TcpServer(serverAddr, serverPort)
+	{
+		this->connectManager = NULL;
 		this->stop = false;
 	}
 

@@ -47,9 +47,10 @@
 class StringBuf{
 public:
 	StringBuf();
+	StringBuf(StringBuf const&);
 	~StringBuf();
 
-	void reallocMem(unsigned int size);
+	int reallocMem(unsigned int size);
 	void mallocMem(unsigned int size);
 	void erase(unsigned int startPos, unsigned int endPos);
 
@@ -67,6 +68,12 @@ public:
 		if (this->m_length >= this->m_offset) {
 			return this->m_length - this->m_offset;
 		}
+		return 0;
+	}
+
+	inline unsigned int get_remailAllocLen() {
+		if (this->m_length <= this->m_allocateLen)
+			return this->m_allocateLen - this->m_length;
 		return 0;
 	}
 
