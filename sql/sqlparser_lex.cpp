@@ -1,4 +1,4 @@
-﻿#line 2 "sqlparser_lex.cpp"
+#line 2 "sqlparser_lex.cpp"
 
 #line 4 "sqlparser_lex.cpp"
 

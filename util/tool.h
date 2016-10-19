@@ -46,12 +46,6 @@ public:
 	static int byte2wstring(const u_uint8* bdata, const unsigned int bdataLen, std::wstring& wstr);
 	static int wstring2byte(const std::wstring& wstr, StringBuf& bdata);
 
-//	static int unicode2string(const u_uint8* unicodeStr, const int len, std::string& desStr);
-//	static int unicode2string(StringBuf& srcBuf, StringBuf& desBuf);
-//	static int string2unicode(const std::string& str, StringBuf& uData);
-//	static int string2unicode(StringBuf& srcBuf, StringBuf& desBuf);
-//	static int ucs22string(const u_uint8* unicodeStr, const int len, std::string& desStr);
-
 	static std::string itoa(const int number);
 
 	static char* format_string(const char* str, const unsigned int length);
@@ -60,6 +54,9 @@ public:
 	static std::string args2string(const char* fmt, ...);
 	static void argList2string(const char* fmt, va_list& argList, std::string& result);
 	static int stringbuf_vsnprintf(char *buf, size_t buflen, const char *format, va_list ap);
+	static int string2wstring(const std::string& str, std::wstring& wstr);
+	static int wstring2string(const std::wstring& wstr, std::string& str);
+
 	/*
 	 * @desc 查找指定目录下的一个文件，如果有多个目标文件，指需要返回第一个目标文件即可
 	 * @param dir 指定的目录
@@ -67,8 +64,6 @@ public:
 	 * @return 查找到的文件名称
 	 * */
 	static std::string search_oneFile(std::string dir, std::string fileType);
-
-
 };
 
 #endif /* PROTOCOL_TOOL_H_ */

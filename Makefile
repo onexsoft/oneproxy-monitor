@@ -42,6 +42,8 @@ MAIN_SOURCES = main.cpp
 
 SOURCES = $(filter-out $(MAIN_SOURCES), $(wildcard *.cpp))
 SOURCES += $(foreach tdir, $(APPSOURCEDIR), $(filter-out $(MAIN_SOURCES), $(wildcard $(tdir)/*.cpp)))
+CSOURCES = $(foreach tdir, $(APPSOURCEDIR), $(filter-out $(MAIN_SOURCES), $(wildcard $(tdir)/*.c)))
+
 HEADERS = $(wildcard ./*.h)
 HEADERS += $(foreach tdir, $(APPSOURCEDIR), $(wildcard $(tdir)/*.h))
 
@@ -54,6 +56,7 @@ else
 	CXXFLAGS += -O2	
 endif
 OBJS =	 $(patsubst %.cpp, $(BUILD)/%.o, $(notdir $(SOURCES)))
+COBJS = $(patsubst %.c, $(BUILD)/%.o, $(notdir $(CSOURCES)))
 
 ifeq ($(MAKECMDGOALS), test)
 	ifeq ($(LANG),)
@@ -74,9 +77,12 @@ all: $(TARGET)
 
 $(OBJS): $(BUILD)/%.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $(DIR) $< -o $@
-	
-$(TARGET): $(OBJS)
-	$(CXX) $(LDFLAGS) -o $(TARGET) $(OBJS) $(LIBS)
+
+$(COBJS): $(BUILD)/%.o: %.c
+	$(CXX) $(CXXFLAGS) -c $(DIR) $< -o $@
+
+$(TARGET): $(OBJS) $(COBJS)
+	$(CXX) $(LDFLAGS) -o $(TARGET) $(OBJS) $(COBJS) $(LIBS)
 
 .PHONY: test
 test: $(TARGET)

@@ -672,41 +672,4 @@ int ProtocolPacket::set_wstringUnicode2BLen(StringBuf& stringBuf, const std::wst
 	return 0;
 }
 
-
-
-//int ProtocolPacket::set_byteVarChar(StringBuf& stringBuf, const std::string& desStr)
-//{
-//	int length = desStr.length();
-//
-//	StringBuf tbuf;
-//	uif(Tool::string2unicode(desStr, tbuf)) {
-//		logs(Logger::ERR, "string2unicode error");
-//		return -1;
-//	}
-//
-//	//1. write length
-//	quick_set_integer_LT(8, stringBuf, length, "set length error");
-//
-//	//2. write data
-//	stringBuf.append((void*)(tbuf.addr() + tbuf.get_offset()), tbuf.get_remailLength());
-//
-//	return 0;
-//}
-//
-//int ProtocolPacket::set_byteVarChar(StringBuf& desBuf, StringBuf& srcBuf)
-//{
-//	int length = srcBuf.get_remailLength();
-//	StringBuf tbuf;
-//	uif (Tool::string2unicode(srcBuf, tbuf)) {
-//		logs(Logger::ERR, "string2unicode error");
-//		return -1;
-//	}
-//
-//	//1. write length
-//	quick_set_integer_LT(8, desBuf, length, "set length error");
-//
-//	//2. write data
-//	desBuf.append((void*)(tbuf.addr() + tbuf.get_offset()), tbuf.get_remailLength());
-//
-//	return 0;
-//}
+#undef is_bigEnd

@@ -10,6 +10,8 @@
 #include "testnetworksocket.h"
 #include "teststringbuf.h"
 #include "testtcpclient.h"
+#include "testtcpserver.h"
+#include "testtool.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -74,7 +76,9 @@ int main(int argc, char* argv[])
 		//ts.add(auto_ptr<Test::Suite>(new TestLogger));
 		//ts.add(auto_ptr<Test::Suite>(new TestNetworkSocket));
 		//ts.add(auto_ptr<Test::Suite>(new TestStringBuf));
-		ts.add(auto_ptr<Test::Suite>(new TestTcpClient));
+//		ts.add(auto_ptr<Test::Suite>(new TestTcpClient));
+		ts.add(auto_ptr<Test::Suite>(new TestTcpServer));
+//		ts.add(auto_ptr<Test::Suite>(new TestTool));
 
 		auto_ptr<Test::Output> output(cmdline(argc, argv));
 		ts.run(*output, true);
@@ -89,7 +93,7 @@ int main(int argc, char* argv[])
 		return EXIT_FAILURE;
 	}
 
-//	system("pause");
+	system("pause");
 
 	return EXIT_SUCCESS;
 }

@@ -16,30 +16,30 @@
  * specific language governing permissions and limitations
  * under the License.
  * 
- * @FileName: testtcpclient.h
+ * @FileName: testtcpserver.h
  * @Description: TODO
  * All rights Reserved, Designed By huih
  * @Company: onexsoft
  * @Author: hui
  * @Version: V1.0
- * @Date: 2016年9月27日 上午11:36:43
+ * @Date: 2016年9月30日 上午11:16:28
  *  
  */
 
-#ifndef TEST_TESTTCPCLIENT_H_
-#define TEST_TESTTCPCLIENT_H_
-
+#ifndef TEST_TESTTCPSERVER_H_
+#define TEST_TESTTCPSERVER_H_
 #include "cpptest.h"
 
-class TestTcpClient: public Test::Suite {
+class TestTcpServer: public Test::Suite {
 public:
-	TestTcpClient() {
-//		TEST_ADD(TestTcpClient::test_getBackendConnection);
-		TEST_ADD(TestTcpClient::test_sqlserver);
+	TestTcpServer() {
+		TEST_ADD(TestTcpServer::test_server);
+	}
+	virtual ~TestTcpServer() {
+
 	}
 private:
-	void test_getBackendConnection();
-	void test_sqlserver();
+	void test_server();
 };
 
-#endif /* TEST_TESTTCPCLIENT_H_ */
+#endif /* TEST_TESTTCPSERVER_H_ */

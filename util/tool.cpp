@@ -31,6 +31,9 @@
 #include "memmanager.h"
 #include "convertutf.h"
 
+#include <vector>
+#include <cassert>
+#include <stdarg.h>
 #include <iostream>
 #include <string.h>
 #include <stdio.h>
@@ -45,6 +48,8 @@
 #include <dirent.h>
 #endif
 
+const int __const_litte_end = 0x12345678;
+#define is_bigEnd() (((char*)(&__const_litte_end))[0] == 0x12)
 unsigned int Tool::quick_hash_code(const char* data , const int len)
 {
 	#define tolower(x)   ((x)>= 'A' && (x) <= 'Z' ? (x) - 'A' + 'a' : (x))
@@ -154,107 +159,6 @@ int Tool::wstring2byte(const std::wstring& wstr, StringBuf& bdata)
 	return 0;
 }
 
-//int Tool::unicode2string(const u_uint8* unicodeStr, const int len, std::string& desStr) {
-//	if (len <= 0)
-//		return 0;
-//
-//	if (len%2 != 0) {
-//		return -1;
-//	}
-//
-//	desStr.reserve(len/2+1);
-//	int i = 0;
-//	for (i = 0; i < len; i = i + 2) {
-//		desStr.insert(i/2, 1, (char)((unicodeStr[i] & 0xff) | (unicodeStr[i+1] & 0xff) << 8));
-//	}
-//	desStr.insert(len/2, 1, (char)'\0');
-//
-//	return 0;
-//}
-
-//int Tool::unicode2string(StringBuf& srcBuf, StringBuf& desBuf)
-//{
-//	int len = srcBuf.get_remailLength();
-//	if (len <= 0)
-//		return 0;
-//
-//	if (len%2 != 0) {
-//		return -1;
-//	}
-//
-//	desBuf.reallocMem(desBuf.get_length() + len / 2);
-//	char* sbuf = (char*)(srcBuf.addr() + srcBuf.get_offset());
-//	char* tbuf = (char*)(desBuf.addr() + desBuf.get_length());
-//	int i = 0;
-//	for (i = 0; i < len; i = i + 2) {
-//		tbuf[i/2] = (char)((sbuf[i] & 0xff) | (sbuf[i+1] & 0xff) << 8);
-//	}
-//	return 0;
-//}
-
-//int Tool::string2unicode(const std::string& str, StringBuf& udata)
-//{
-//	udata.reallocMem(udata.get_length() + str.length() * 2);
-//	for (unsigned int i = 0; i < str.length(); ++i) {
-//		char ch = (char)(*(str.c_str() + i));
-//		udata.addr()[udata.get_length() + i * 2] = (u_uint8)(ch & 0xff);
-//		udata.addr()[udata.get_length() + i * 2 + 1] = (u_uint8)((ch >> 8) & 0xff);
-//	}
-//	udata.set_length(udata.get_length() + str.length() * 2);
-//	return 0;
-//}
-
-//int Tool::string2unicode(StringBuf& srcBuf, StringBuf& desBuf)
-//{
-//	desBuf.reallocMem(desBuf.get_length() + srcBuf.get_remailLength() * 2);
-//
-//	for (unsigned int i = srcBuf.get_offset(); i < srcBuf.get_length(); ++i) {
-//		char ch = (char)(*(srcBuf.addr() + i));
-//		desBuf.addr()[desBuf.get_length() + i * 2] = (u_uint8)(ch & 0xff);
-//		desBuf.addr()[desBuf.get_length() + i * 2 + 1] = (u_uint8)((ch >> 8) & 0xff);
-//	}
-//	desBuf.set_length(desBuf.get_length() + srcBuf.get_remailLength() * 2);
-//
-//	return 0;
-//}
-
-//int Tool::ucs22string(const u_uint8* unicodeStr, const int len, std::string& desStr)
-//{
-//	if (len <= 0)
-//		return 0;
-//	if (len %2 != 0) {
-//		return -1;
-//	}
-//
-//	logs_buf_force("unicodestr", (void*)unicodeStr, len);
-//	//UTF16 tstr[len/2] = {0};
-//	std::wstring tstr;
-//	int i = 0;
-//	for (i = 0; i < len; i = i + 2) {
-//		tstr.insert(i/2, 1, (wchar_t)((unicodeStr[i] & 0x00ff) | ((unicodeStr[i+1] & 0x00ff) << 8)));
-//	}
-//
-//	logs_buf_force("tstrunicodestr", (void*)tstr.c_str(), tstr.length() * 2);
-//
-//	uif(Tool::conv_utf16ToUtf8(tstr, desStr)) {
-//		logs(Logger::ERR, "utf16ToUtf8 error");
-//		return -1;
-//	}
-//	desStr.insert(desStr.length(), 1, '\0');
-//	logs(Logger::ERR, "desStr: %s", desStr.c_str());
-//	//tstr.insert(tstr.length(), 1, (wchar_t)'\0');
-////	StringBuf tb;
-////	tb.reallocMem(len);
-////	UTF8* ttb = (UTF8*)tb.addr();
-////	ConvertUTF16toUTF8((const UTF16**)&tstr, (const UTF16*)(tstr + len/2), (UTF8**)&ttb, (UTF8*)(ttb + tb.get_allocateLen()), strictConversion);
-////	logs(Logger::ERR, "tb: %s", tb.addr());
-//
-////	desStr.append((char*)unicodeStr, len);
-////	desStr.insert(desStr.length(), 1, (char)'\0');
-//
-//	return 0;
-//}
-
 std::string Tool::itoa(const int number)
 {
 	char buf[32];
@@ -346,6 +250,38 @@ int Tool::stringbuf_vsnprintf(char *buf, size_t buflen, const char *format, va_l
 #endif
 	buf[buflen-1] = '\0';
 	return r;
+}
+
+int Tool::string2wstring(const std::string& str, std::wstring& wstr)
+{
+	if (str.length() <= 0)
+		return 0;
+	for(unsigned int i = 0; i < str.length(); ++i) {
+		wchar_t wc = (wchar_t)(*((char*)(str.c_str() + i)));
+		wstr.insert(wstr.length(), 1, wc);
+	}
+	return 0;
+}
+
+int Tool::wstring2string(const std::wstring& wstr, std::string& str)
+{
+	if (wstr.length() <= 0)
+		return 0;
+
+	for (unsigned int i = 0; i < wstr.length(); ++i) {
+		wchar_t wc = *(wstr.c_str() + i);
+		char chh = (char)((wc >> 8) & 0x00ff);
+		char chl = (char)(wc & 0x00ff);
+
+		if (is_bigEnd()) {
+			str.insert(str.length(), 1, chh);
+			str.insert(str.length(), 1, chl);
+		} else {
+			str.insert(str.length(), 1, chl);
+			str.insert(str.length(), 1, chh);
+		}
+	}
+	return 0;
 }
 
 std::string Tool::search_oneFile(std::string dirStr, std::string fileType)
