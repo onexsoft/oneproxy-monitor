@@ -2,7 +2,7 @@ BUILD = build
 BUILD_TEST_BIN = utest
 
 ifeq ($(LANG),) #windows
-	INSTALLDIR = $(BUILD)
+	INSTALLDIR = install
 	LDFLAGS = -static-libgcc -static-libstdc++
 	LIBS = ./lib/win/libssl.a ./lib/win/libcrypto.a ./lib/win/libgdi32.a -lwsock32 -lwinmm
 	INCLUDE = -IC:\openssl-1.0.2e\win64\include
@@ -88,13 +88,14 @@ $(TARGET): $(OBJS) $(COBJS)
 test: $(TARGET)
 
 install:
-	@mkdir -p $(INSTALLDIR)/include/
-	@mkdir -p $(INSTALLDIR)/include/conf/
-	@echo $(HEADERS)
-	@cp -rf $(HEADERS) $(INSTALLDIR)/include/
-	@cp -rf conf/config.h $(INSTALLDIR)/include/conf/
+	-@mkdir $(INSTALLDIR)
+	-@mkdir $(INSTALLDIR)/include/
+	-@mkdir $(INSTALLDIR)/include/conf/
+	-@echo $(HEADERS)
+	-@cp -rf $(HEADERS) $(INSTALLDIR)/include/
+	-@cp -rf conf/config.h $(INSTALLDIR)/include/conf/
+	-@cp -rf $(TARGET) $(INSTALLDIR)/bin/
 
 clean:
-	-@rm $(BUILD)/*.o
-	-@rm $(TARGET)
+	-@rm $(BUILD)/*.o $(TARGET)
 	-@rm $(BUILD)/$(BUILD_TEST_BIN)/*

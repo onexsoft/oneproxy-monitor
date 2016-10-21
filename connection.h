@@ -101,24 +101,64 @@ public:
 	}
 }AutoPointer;
 
-class ProtocolBase;
-typedef struct _connection_t{
-	NetworkSocket *clins;
-	NetworkSocket *servns;
-	ProtocolBase* protocolBase;
-	DataBase* database;
-	DoingRecord record;
+typedef struct _database_in_connect{
+	DataBaseGroup* dataBaseGroup;
+	DataBase* masterDataBase;
+	DataBase* slaveDataBase;
+	DataBase* currentDataBase;//要么指向masterDataBase要么指向slaveDataBase
+	_database_in_connect() {
+		this->dataBaseGroup = NULL;
+		this->masterDataBase = NULL;
+		this->slaveDataBase = NULL;
+		this->currentDataBase = NULL;
+	}
+} ConnDB;
 
+typedef struct _socket_set_t{
+	NetworkSocket* curclins;
+	NetworkSocket* masters;
+	NetworkSocket* slavers;
+	NetworkSocket* curservs;//指向masters或者slavers
+	_socket_set_t() {
+		this->curclins = NULL;
+		this->curservs = NULL;
+		this->masters = NULL;
+		this->slavers = NULL;
+	}
+
+	NetworkSocket* get_clientSock() {
+		return this->curclins;
+	}
+
+	NetworkSocket* get_curServSock() {
+		return this->curservs;
+	}
+
+	void use_masterServer() {
+		this->curservs = masters;
+	}
+
+	void use_slaverServer() {
+		this->curservs = this->slavers;
+	}
+} SocketSet;
+
+class ProtocolBase;
+typedef struct _connection_t {
+	SocketSet sock;
+	ProtocolBase* protocolBase;
+	ConnDB database;
+	DoingRecord record;
 	u_uint64 createConnTime;//millsecond
 	AutoPointer pointer;
 
 	_connection_t() {
-		this->clins = NULL;
-		this->servns = NULL;
 		this->protocolBase = NULL;
-		this->database = NULL;
 		this->createConnTime = 0;
 	}
+#define clins() sock.curclins
+#define servns() sock.curservs
+#define curdb() database.currentDataBase
 } Connection;
 
 #endif /* CONNECTION_H_ */

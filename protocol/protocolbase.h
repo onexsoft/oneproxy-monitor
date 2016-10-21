@@ -47,6 +47,7 @@
 
 #include "protocoldynamiccls.h"
 #include "connection.h"
+#include "tcpclient.h"
 #include "sqlparser.h"
 #include "systemapi.h"
 #include "record.h"
@@ -63,7 +64,7 @@ typedef enum _protocol_handle_return_value_t{
 	HANDLE_RETURN_SUCCESS, //表示当前函数成功处理，框架会调用下一个注册函数处理剩下的数据
 	HANDLE_RETURN_SEND_DIRECT,//表示当前处理成功，但是框架不会处理剩下的数据，直接把接收到的数据直接转发到对端
 	HANDLE_RETURN_SEND_TO_CLIENT,//表示把前端缓存中的数据，直接转发给客户端。这种情况是针对在处理过程中修改了数据包，这个数据包是发送到前端的数据。目前保留
-}ProtocolHandleRetVal;
+} ProtocolHandleRetVal;
 
 declare_clsfunc_pointer(ProtocolHandleRetVal, ProtocolBase, BaseFunc, Connection&, StringBuf&)
 #define declare_protocol_handle_func(funcName) ProtocolHandleRetVal funcName(Connection& conn, StringBuf& packet);
@@ -78,7 +79,8 @@ public:
 	virtual void protocol_front(Connection& conn);
 	virtual void protocol_backend(Connection& conn);
 	virtual bool is_currentDatabase(Connection& conn) = 0;
-	virtual void protocol_init(Connection& conn){};
+	virtual int protocol_init(Connection& conn){return 0;}
+	virtual int protocol_getBackendConnect(Connection& conn);
 
 	static void* createInstance();
 	virtual void destoryInstance() = 0;
@@ -91,8 +93,11 @@ private:
 	declare_type_alias(BaseHandleFuncMap, std::map<int, BaseFunc>)
 	BaseHandleFuncMap frontHandleFunc;
 	BaseHandleFuncMap backendHandleFunc;
+	TcpClient tcpClient;
 
 protected:
+	virtual int protocol_initBackendConnect(Connection& conn) {return 0;}
+
 	//调用此函数，返回包的类型，及注册函数的key值，由于每种数据库包类型长度不同，位置不同，故需要协议部分实现
 	virtual int get_packetType(StringBuf& packet) = 0;
 	virtual bool is_frontPacket(int type);

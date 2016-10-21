@@ -60,9 +60,7 @@ int ClientThread::add_task(NetworkSocket* ns)
 {
 	Connection *conn = new Connection();
 	conn->createConnTime = SystemApi::system_millisecond();
-
-	conn->clins = ns;
-	conn->servns = NULL;
+	conn->clins() = ns;
 
 	clientLock.lock();
 	this->connectTypeMap[ns->get_fd()] = conn;
@@ -93,12 +91,11 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 	}
 
 	//2.read data from front socket
-	NetworkSocket *cns = con->clins;
+	NetworkSocket *cns = con->clins();
 	if (cns == NULL) {
 		logs(Logger::ERR, "cns is null");
 		return;
 	}
-
 	if (cns->read_data() < 0) {
 		this->finished_connection(con);
 		return;
@@ -106,17 +103,23 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 	if (cns->get_recvData().get_length() == 0) {
 		return;
 	}
-	logs(Logger::INFO, "send (%d) bytes data to backend", cns->get_recvData().get_length());
-	logs_buf((char*)"front =====> backend", (void*)cns->get_recvData().get_buf(), cns->get_recvData().get_length());
 
 	//3. analyse current data
-	if (this->parse_frontDataPacket(con)){
+	if (this->parse_frontDataPacket(con)) {
 		logs(Logger::ERR, "parse packet error");
-		if (con->database == NULL || con->protocolBase == NULL) {
+		if (con->database.dataBaseGroup == NULL || con->protocolBase == NULL) {
 			logs(Logger::ERR, "don't recognition the packet and current don't have database information, so close the connection");
 			this->finished_connection(con);
 			return;
 		}
+	}
+
+	//4.check: Have data need send to server or not
+	if (cns->get_recvData().get_remailLength() <= 0) {
+		if (cns->get_sendData().get_remailLength() > 0) {//maybe have data need send to client
+			this->write_data(*con, true);
+		}
+		return;
 	}
 
 	//4. if current socket is not connection to server, alloc server
@@ -125,27 +128,24 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 		return;
 	}
 
+	logs(Logger::INFO, "send (%d) bytes data to backend", cns->get_recvData().get_length());
+	logs_buf((char*)"front =====> backend", (void*)cns->get_recvData().get_buf(), cns->get_recvData().get_length());
+
 	//5. write data to server
 	this->write_data(*con, false);
 }
 
 void ClientThread::finished_connection(Connection *con)
 {
-	NetworkSocket *cns = con->clins;
-	NetworkSocket *sns = con->servns;
+	NetworkSocket *cns = con->clins();
+	NetworkSocket *msns = con->sock.masters;
+	NetworkSocket *ssns = con->sock.slavers;
+	NetworkSocket *csns = con->sock.curservs;
 
-	if (cns != NULL && sns != NULL) {
-		logs(Logger::INFO, "close connection (client(%d) ===> server(%d))",
-				con->clins->get_fd(), con->servns->get_fd());
-	} else if (cns != NULL) {
-		logs(Logger::INFO, "close client(%d)", cns->get_fd());
-	} else if (sns != NULL) {
-		logs(Logger::INFO, "close server(%d)", sns->get_fd());
-	}
-
-	if (sns) {//explain the client already get server connection
+	if (csns) {//explain the client already get server connection
 		u_uint64 endTime = SystemApi::system_millisecond();
-		record()->clientQueryMap[cns->get_addressHashCode()].part.onLineTime += (endTime - con->createConnTime);
+		record()->clientQueryMap[cns->get_addressHashCode()].part.onLineTime
+				+= (endTime - con->createConnTime);
 	}
 
 	if (cns) {
@@ -161,13 +161,22 @@ void ClientThread::finished_connection(Connection *con)
 		delete cns;
 	}
 
-	if (sns) {
-		this->ioEvent->del_ioEvent(sns->get_fd());
+	if (msns) {
+		this->ioEvent->del_ioEvent(msns->get_fd());
 		clientLock.lock();
-		this->connectTypeMap.erase(sns->get_fd());
-		logs(Logger::INFO, "remove fd(%d) to connectTypeMap(%d)", sns->get_fd(), this->connectTypeMap.size());
+		this->connectTypeMap.erase(msns->get_fd());
+		logs(Logger::INFO, "remove fd(%d) to connectTypeMap(%d)", msns->get_fd(), this->connectTypeMap.size());
 		clientLock.unlock();
-		delete sns;
+		delete msns;
+	}
+
+	if (ssns) {
+		this->ioEvent->del_ioEvent(ssns->get_fd());
+		clientLock.lock();
+		this->connectTypeMap.erase(ssns->get_fd());
+		logs(Logger::INFO, "remove fd(%d) to connectTypeMap(%d)", ssns->get_fd(), this->connectTypeMap.size());
+		clientLock.unlock();
+		delete ssns;
 	}
 
 	if (con->protocolBase != NULL) {
@@ -180,23 +189,24 @@ void ClientThread::finished_connection(Connection *con)
 
 void ClientThread::get_serverFailed(Connection *con)
 {
-	NetworkSocket *servns = con->servns;
-	if (servns) {
-		logs(Logger::ERR, "connect to backend error(port: %d, address: %s)",
-						servns->get_port(), servns->get_address().c_str());
+	if (con->sock.masters != NULL){
+		delete con->sock.masters;
+		con->sock.masters = NULL;
 	}
-	delete servns;
-	con->servns = NULL;
+	if (con->sock.slavers != NULL){
+		delete con->sock.slavers;
+		con->sock.slavers = NULL;
+	}
 
-	con->clins->get_socketRecord().connServerFailed();
-	if (con->clins->get_socketRecord().get_connServerFailed()
+	con->clins()->get_socketRecord().connServerFailed();
+	if (con->clins()->get_socketRecord().get_connServerFailed()
 			>= config()->get_tryConnServerTimes()) {
-		record()->clientQueryMap[con->clins->get_addressHashCode()].part.connServerFail++;
+		record()->clientQueryMap[con->clins()->get_addressHashCode()].part.connServerFail++;
 		finished_connection(con);
 	} else {
-		this->ioEvent->del_ioEvent(con->clins->get_fd());
-		this->connManager->finished_task(this->get_threadId(), con->clins);
-		this->connManager->add_task(con->clins);
+		this->ioEvent->del_ioEvent(con->clins()->get_fd());
+		this->connManager->finished_task(this->get_threadId(), con->clins());
+		this->connManager->add_task(con->clins());
 		if (con->protocolBase) {
 			con->protocolBase->destoryInstance();
 		}
@@ -208,27 +218,16 @@ void ClientThread::get_serverFailed(Connection *con)
 int ClientThread::alloc_server(Connection* con)
 {
 	//connection to server
-	NetworkSocket* servns = NULL;
-	if (con->servns == NULL) {
-		if (con->database != NULL) {
-			servns = new NetworkSocket(con->database->get_addr(), con->database->get_port());
-		} else {
-			servns = new NetworkSocket( config()->get_database()->get_addr(),
-					config()->get_database()->get_port());
-		}
-		if (tcpClient.get_backendConnection(servns)) {
-			logs(Logger::ERR, "connection to backend error(address: %s, port:%d)",
-					servns->get_address().c_str(), servns->get_port());
-			con->servns = servns;
+	if (con->servns() == NULL) {
+		if (con->protocolBase->protocol_getBackendConnect(*con)) {
 			get_serverFailed(con);
 			return -1;
 		}
-		con->servns = servns;
 		clientLock.lock();
-		this->connectTypeMap[servns->get_fd()] = con;
+		this->connectTypeMap[con->servns()->get_fd()] = con;
 		clientLock.unlock();
-		logs(Logger::INFO, "add server fd(%d) to epoll", con->servns->get_fd());
-		this->ioEvent->add_ioEventRead(con->servns->get_fd(), ClientThread::rw_backendData, this);
+		logs(Logger::INFO, "add server fd(%d) to epoll", con->servns()->get_fd());
+		this->ioEvent->add_ioEventRead(con->servns()->get_fd(), ClientThread::rw_backendData, this);
 	}
 	return 0;
 }
@@ -236,30 +235,52 @@ int ClientThread::alloc_server(Connection* con)
 int ClientThread::parse_frontDataPacket(Connection* con)
 {
 	logs(Logger::INFO, "parse_frontDataPacket");
-	NetworkSocket* ns = con->clins;
+	NetworkSocket* ns = con->clins();
 	if (con != NULL && con->protocolBase == NULL) {
 		unsigned int i = 0;
-		for (i = 0; i < config()->get_databaseSize(); ++i) {
-			DataBase* db = config()->get_database(i);
-			if (db->get_frontPort() != 0 && db->get_frontPort() != ns->get_attachData().get_listenPort())
+		for (i = 0; i < config()->get_dataBaseGroupSize(); ++i) {
+			DataBaseGroup* dbg = config()->get_dataBaseGroup(i);
+			if (dbg->get_frontPort() != 0 && dbg->get_frontPort() != ns->get_attachData().get_listenPort())
 				continue;
 
 			ProtocolBase* base =
-					(ProtocolBase*)ProtocolFactory::sharedClassFactory().getClassByName(db->get_className());
+					(ProtocolBase*)ProtocolFactory::sharedClassFactory().getClassByName(dbg->get_className());
 			if(base != NULL && base->is_currentDatabase(*con)) {
-				logs(Logger::INFO, "current database is: className %s, host: %d, port: %d, frontPort: %d",
-						db->get_className().c_str(), db->get_addr().c_str(), db->get_port(), db->get_frontPort());
-				base->protocol_init(*con);
-				con->database = db;
+				logs(Logger::INFO,
+						"current database is: labelName %s, className %s, masterGroup: %s, "
+						"slaveGroup: %s, frontPort: %d", dbg->get_labelName().c_str(),
+						dbg->get_className().c_str(), dbg->get_dbMasterGroup().c_str(),
+						dbg->get_dbSlaveGroup().c_str(), dbg->get_frontPort());
+				uif(base->protocol_init(*con)) {//环境初始化失败
+					return -1;
+				}
+				con->database.dataBaseGroup = dbg;
 				con->protocolBase = base;
 				base->protocol_front(*con);
-				return 0;
+				return this->get_databaseFromGroup(*con);
 			}
 		}
 		return -1;
 	} else {
 		con->protocolBase->protocol_front(*con);
 	}
+	return 0;
+}
+
+int ClientThread::get_databaseFromGroup(Connection& con)
+{
+	if (con.database.dataBaseGroup->get_dbMasterGroupVec().size() > 0) {
+		con.database.masterDataBase = con.database.dataBaseGroup->get_dbMasterGroupVec().front();
+	} else {//必须需要master
+		return -1;
+	}
+
+	if (con.database.dataBaseGroup->get_dbSlaveGroupVec().size() > 0) {//可以没有slave
+		con.database.slaveDataBase = con.database.dataBaseGroup->get_dbSlaveGroupVec().front();
+	}
+
+	//first set current database is master database
+	con.database.currentDataBase = con.database.masterDataBase;
 	return 0;
 }
 
@@ -274,7 +295,7 @@ void ClientThread::handle_readBackendData(unsigned int fd)
 	}
 
 	//2. read data from backend
-	NetworkSocket *sns = con->servns;
+	NetworkSocket *sns = con->sock.get_curServSock();
 	if (sns == NULL)
 		return;
 
@@ -298,10 +319,8 @@ void ClientThread::handle_readBackendData(unsigned int fd)
 }
 
 int ClientThread::parse_backendDataPacket(Connection* con) {
-	if (con == NULL || con->protocolBase == NULL) {
-		logs(Logger::ERR, "con == NULL || con->protocolBase == NULL");
-		return -1;
-	}
+	assert(con != NULL);
+	assert(con->protocolBase != NULL);
 	con->protocolBase->protocol_backend(*con);
 	return 0;
 }
@@ -311,15 +330,20 @@ void ClientThread::write_data(Connection& con, bool isFront)
 	int ret = 0;
 	NetworkSocket* tSocket = NULL;
 	StringBuf* tData = NULL;
+	StringBuf emptyPacket;
 	Func func = NULL;
 
 	if (isFront) {
-		tSocket = con.clins;
-		tData = &(con.servns->get_recvData());
+		tSocket = con.sock.get_clientSock();
+		if (con.sock.get_curServSock() != NULL) {
+			tData = &(con.sock.get_curServSock()->get_recvData());
+		} else {
+			tData = &emptyPacket;
+		}
 		func = ClientThread::rw_frontData;
 	} else {
-		tSocket = con.servns;
-		tData = &(con.clins->get_recvData());
+		tSocket = con.sock.get_curServSock();
+		tData = &(con.sock.get_clientSock()->get_recvData());
 		func = ClientThread::rw_backendData;
 	}
 	NetworkSocket& desSocket = *tSocket;
@@ -359,6 +383,7 @@ void ClientThread::write_data(Connection& con, bool isFront)
 			this->ioEvent->add_ioEventWrite(desSocket.get_fd(), func, this);
 			break;
 		} else uif (ret) {
+			logs(Logger::ERR, "write data to (%d) error", desSocket.get_fd());
 			this->finished_connection(&con);
 			return;
 		} else {//写数据完毕

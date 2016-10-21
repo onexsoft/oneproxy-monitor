@@ -60,36 +60,81 @@ struct config_key_value_t{
 
 #define declare_cvt_func(funcName) public: void funcName (std::string value, ConfigKeyValue& cf);
 class DataBase: public ConfigBase{
+	declare_class_member(std::string, labelName)//数据库标签名称,如果没有配置，则使用ini的节名代替
 	declare_class_member(std::string, addr)
 	declare_class_member(unsigned int, port)
-	declare_class_member(unsigned int, frontPort)//当为0时，前端数据都可以发送到这个数据库
-	declare_class_member(std::string, className)
-	declare_class_member(std::string, companyName)
-	declare_class_member(int, priority) //数据库的优先级，优先级高的，先进行协议匹配. 要求优先级必须大于等于0，并且数字越大越优先
+	declare_class_member(unsigned int, weightValue) //权重值越高，并使用的可能性越高
+	declare_class_member(unsigned int, connectNum) //内部使用，不用外部配置。记录当前数据库有多少连接
+	declare_class_member(std::string, userName)
+	declare_class_member(std::string, password)
 
 	declare_cvt_func(cvtString)
 	declare_cvt_func(cvtInt)
 public:
-	DataBase(){}
-	DataBase(std::string companyName, std::string className, std::string addr, unsigned int port):
+	DataBase() {
+		this->m_port = 0;
+		this->m_weightValue = 0;
+		this->m_connectNum = 0;
+	}
+	DataBase(std::string labelName, std::string addr, unsigned int port, unsigned int weightValue,
+			std::string userName, std::string password):
+		m_labelName(labelName),
 		m_addr(addr),
 		m_port(port),
-		m_frontPort(0),
-		m_className(className),
-		m_companyName(companyName),
-		m_priority(0)
+		m_weightValue(weightValue),
+		m_connectNum(0),
+		m_userName(userName),
+		m_password(password)
 	{
-
 	}
 
 	bool is_valid() {
-		if (this->m_addr.length() > 0 && this->m_port > 0 && this->m_className.length() > 0)
+		if (this->m_addr.length() > 0 && this->m_port > 0
+				&& this->m_userName.length() > 0 && this->m_password.length() > 0)
 			return true;
 		return false;
 	}
 	static bool sort_database(DataBase a, DataBase b) {
-		return a.get_priority() > b.get_priority();
+		return a.get_weightValue() > b.get_weightValue();
 	}
+};
+
+class DataBaseGroup: public ConfigBase {
+	declare_class_member(std::string, labelName)//使用ini的节名
+	declare_class_member(std::string, dbMasterGroup)
+	declare_class_member(std::string, dbSlaveGroup)
+	declare_class_member(std::string, className)
+	declare_class_member(unsigned int, frontPort)
+	declare_class_member_co(std::vector<DataBase*>, dbMasterGroupVec)
+	declare_class_member_co(std::vector<DataBase*>, dbSlaveGroupVec)
+
+	declare_cvt_func(cvtString)
+	declare_cvt_func(cvtInt)
+public:
+	DataBaseGroup() {
+		this->m_frontPort = 0;
+	}
+
+	DataBaseGroup(std::string labelName, std::string dbMasterGroup,
+			std::string dbSlaveGroup, std::string className, unsigned int frontPort):
+			m_labelName(labelName),
+			m_dbMasterGroup(dbMasterGroup),
+			m_dbSlaveGroup(dbSlaveGroup),
+			m_className(className),
+			m_frontPort(frontPort){
+	}
+
+	bool is_valid() {
+		if (this->m_dbMasterGroup.length() > 0 && this->m_className.length() > 0) {
+			return true;
+		}
+		return false;
+	}
+
+	//根据dbGroupName中的标签从dbVec中查找数据库信息，把地址保存到dbGVec中
+	static int set_dataBaseGroupVec(std::vector<DataBase>& dbVec,
+			const std::string dbGroupName,
+			std::vector<DataBase*>& dbGVec);
 };
 
 #define config() Config::get_config()
@@ -112,6 +157,8 @@ class Config: public ConfigBase{
 	declare_class_member(std::string, vipIfName)
 	declare_class_member(std::string, vipAddress)
 	declare_class_member(int, threadNum)
+	declare_class_member(std::string, clientUserName)
+	declare_class_member(std::string, clientPassword)
 
 	declare_cvt_func(cvtString)
 	declare_cvt_func(cvtInt)
@@ -122,25 +169,34 @@ private:
 	void add_config(std::vector<ConfigKeyValue>&, std::string, std::string, CVTFunc, SetFunc);
 	void default_oneproxyConfig();
 	void default_database();
+	void default_databaseGroup();
 	void default_config();
 	void print_config();
 	void handle_ports();
 	int handle_config();
+	int handle_dataBaseGroup();
 
 public:
 	static Config* get_config();
 	int handle_args(int argc, char* argv[]);
 	int loadConfig(std::string filePath);
+
 	void set_database(DataBase database);
 	DataBase* get_database(unsigned int index);
 	DataBase* get_database();
 	unsigned int get_databaseSize();
 
+	void set_dataBaseGroup(DataBaseGroup dataBaseGroup);
+	DataBaseGroup* get_dataBaseGroup(unsigned int index);
+	unsigned int get_dataBaseGroupSize();
+
 private:
-	std::vector<DataBase> dbvector;
+	std::vector<DataBase> dbVector;
+	std::vector<DataBaseGroup> dbGroupVector;
 	static MutexLock mutexLock;
-	std::vector<ConfigKeyValue> oneproxycfg;
-	std::list<std::vector<ConfigKeyValue> > dbinfocfg;//支持配置多个db信息
+	std::vector<ConfigKeyValue> oneproxyCfg;
+	std::list<std::vector<ConfigKeyValue> > dbInfoCfg;//支持配置多个db信息
+	std::list<std::vector<ConfigKeyValue> > dbGroupCfg;//多个组信息
 };
 
 #endif /* CONFIG_H_ */

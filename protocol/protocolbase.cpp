@@ -30,10 +30,10 @@
 
 void ProtocolBase::protocol_front(Connection& conn)
 {
-	StringBuf& packet = conn.clins->get_recvData();
-	int oldOffset = packet.get_offset();
+	StringBuf& packet = conn.sock.get_clientSock()->get_recvData();
+	unsigned int oldOffset = packet.get_offset();
 
-	do{
+	do {
 		//1. 统计前端接收到的数据长度
 		this->stat_readFrontData(conn);
 
@@ -53,16 +53,24 @@ void ProtocolBase::protocol_front(Connection& conn)
 		}
 
 		//4. 调用注册函数进行处理
-		StringBuf& desPacket = *(conn.clins->get_bufPointer());
+		StringBuf& desPacket = *(conn.sock.get_clientSock()->get_bufPointer());
 		for(; desPacket.get_offset() < desPacket.length(); ) {//循环处理，直到所有的数据处理完毕
 			int type = this->get_packetType(desPacket);
 			ProtocolBase::BaseHandleFuncMap::iterator it = this->frontHandleFunc.find(type);
 			lif(it != this->frontHandleFunc.end()) {
 				ProtocolHandleRetVal hret = (this->*it->second)(conn, desPacket);
-				if(hret == HANDLE_RETURN_ERROR) {
+				if(hret == HANDLE_RETURN_ERROR) {//协议成没有找到对应的类型或者其他的情况
 					logs(Logger::INFO, "handle front packet error or need send direct, packet type is %d", (int)type);
 					break;
 				} else if (hret == HANDLE_RETURN_SEND_DIRECT) {
+					break;
+				} else if (hret == HANDLE_RETURN_SEND_TO_CLIENT) {
+					//1. 把despacket包中的数据复制到发送包中
+					StringBuf& sendPacket = conn.clins()->get_sendData();
+					sendPacket.append((void*)(desPacket.addr() + desPacket.get_offset()), desPacket.get_remailLength());
+
+					//2. 把客户端接收包中的数据清理掉，防止发送到服务端
+					conn.clins()->get_recvData().clear();
 					break;
 				}
 			} else {
@@ -79,12 +87,13 @@ void ProtocolBase::protocol_front(Connection& conn)
 		this->protocol_clearFrontStatPacket(conn);
 	}while(0);
 
-	packet.set_offset(oldOffset);
+	if (packet.length() > oldOffset)//when clear, the oldOffset maybe bigger than length.
+		packet.set_offset(oldOffset);
 }
 
 void ProtocolBase::protocol_backend(Connection& conn)
 {
-	StringBuf& packet = conn.servns->get_recvData();
+	StringBuf& packet = conn.sock.get_curServSock()->get_recvData();
 	int oldOffset = packet.get_offset();
 
 	do{
@@ -109,7 +118,7 @@ void ProtocolBase::protocol_backend(Connection& conn)
 		}
 
 		//4. 调用注册函数进行处理
-		StringBuf& desPacket = *(conn.servns->get_bufPointer());
+		StringBuf& desPacket = *(conn.sock.get_curServSock()->get_bufPointer());
 		for(; desPacket.get_offset() < desPacket.length(); ) {//循环处理，直到所有的数据处理完毕
 			int type = this->get_packetType(desPacket);
 			ProtocolBase::BaseHandleFuncMap::iterator it = this->backendHandleFunc.find(type);
@@ -133,6 +142,27 @@ void ProtocolBase::protocol_backend(Connection& conn)
 	} while(0);
 
 	packet.set_offset(oldOffset);
+}
+
+int ProtocolBase::protocol_getBackendConnect(Connection& conn)
+{
+	uif (conn.curdb() == NULL) {
+		logs(Logger::ERR, "current database is NULL");
+		return -1;
+	}
+
+	NetworkSocket* sns = NULL;
+	if (conn.servns() == NULL) {
+		sns = new NetworkSocket(conn.curdb()->get_addr(), conn.curdb()->get_port());
+		conn.servns() = sns;
+		if (tcpClient.get_backendConnection(sns)
+				|| this->protocol_initBackendConnect(conn)) {
+			logs(Logger::ERR, "connection to backend error(address: %s, port:%d)",
+					sns->get_address().c_str(), sns->get_port());
+			return -1;
+		}
+	}
+	return 0;
 }
 
 bool ProtocolBase::is_frontPacket(int type)
@@ -172,20 +202,19 @@ PreHandleRetValue ProtocolBase::prehandle_backendPacket(Connection& conn)
 
 int ProtocolBase::protocol_initFrontStatPacket(Connection& conn)
 {
-	uif(conn.clins == NULL)
-		return -1;
+	assert(conn.clins() != NULL);
 
 	//默认情况下，直接设置需要处理的数据为接收到的数据包
-	conn.clins->set_bufPointer(&(conn.clins->get_recvData()));
+	NetworkSocket* ns = conn.clins();
+	ns->set_bufPointer(&(ns->get_recvData()));
 	return 0;
 }
 
 int ProtocolBase::protocol_initBackendStatPacket(Connection& conn)
 {
-	uif (conn.servns == NULL)
-		return -1;
-
-	conn.servns->set_bufPointer(&(conn.servns->get_recvData()));
+	assert(conn.sock.curservs != NULL);
+	NetworkSocket* ns = conn.sock.curservs;
+	ns->set_bufPointer(&(ns->get_recvData()));
 	//默认情况下，直接设置需要处理的数据为接收到的后端的数据包
 	return 0;
 }
@@ -261,14 +290,16 @@ int ProtocolBase::parse_sql(std::string sqlText, std::string& modifySqlText)
 //统计读取到前端的数据
 void ProtocolBase::stat_readFrontData(Connection& conn)
 {
-	record()->clientQueryMap[conn.clins->get_addressHashCode()].part.upDataSize += conn.clins->get_recvData().get_length();
+	record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.upDataSize
+			+= conn.clins()->get_recvData().get_length();
 }
 
 //统计从后端返回的数据
 void ProtocolBase::stat_readBackendData(Connection& conn)
 {
-	record()->clientQueryMap[conn.clins->get_addressHashCode()].part.downDataSize += conn.servns->get_recvData().get_length();
-	record()->sqlInfoMap[conn.record.sqlHashCode].part.recvSize += conn.servns->get_recvData().get_length();
+	record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.downDataSize
+			+= conn.servns()->get_recvData().get_length();
+	record()->sqlInfoMap[conn.record.sqlHashCode].part.recvSize += conn.servns()->get_recvData().get_length();
 }
 
 //开始事务
@@ -360,8 +391,8 @@ void ProtocolBase::stat_saveSql(Connection& conn, std::string& sqlText)
 		sqlInfo.sqlText = conn.record.sqlText;
 		sqlInfo.part.tabs = this->sqlParser.tableCount();
 		sqlInfo.part.type =  (Record::SqlOp)this->sqlParser.queryType();
-		record()->clientQueryMap[conn.clins->get_addressHashCode()].add_sqlList(sqlInfo.part.hashCode);
-		sqlInfo.add_clientSet(conn.clins->get_addressHashCode());
+		record()->clientQueryMap[conn.clins()->get_addressHashCode()].add_sqlList(sqlInfo.part.hashCode);
+		sqlInfo.add_clientSet(conn.clins()->get_addressHashCode());
 
 		//get table info
 		for (unsigned int i = 0; i < sqlInfo.part.tabs; ++i) {
@@ -416,15 +447,15 @@ void ProtocolBase::stat_executeSql(Connection& conn)
 	sqlInfo.part.exec++;
 
 	//record client
-	record()->clientQueryMap[conn.clins->get_addressHashCode()].part.queryNum++;
+	record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.queryNum++;
 	if (sqlInfo.part.type == stats::sql_op_select) {
-		record()->clientQueryMap[conn.clins->get_addressHashCode()].part.selectNum++;
+		record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.selectNum++;
 	} else if (sqlInfo.part.type == stats::sql_op_insert) {
-		record()->clientQueryMap[conn.clins->get_addressHashCode()].part.insertNum++;
+		record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.insertNum++;
 	} else if (sqlInfo.part.type == stats::sql_op_update) {
-		record()->clientQueryMap[conn.clins->get_addressHashCode()].part.updateNum++;
+		record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.updateNum++;
 	} else if (sqlInfo.part.type == stats::sql_op_delete) {
-		record()->clientQueryMap[conn.clins->get_addressHashCode()].part.deleteNum++;
+		record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.deleteNum++;
 	}
 
 	//in trans.
@@ -501,6 +532,6 @@ void ProtocolBase::stat_executeErr(Connection& conn)
 	record()->sqlInfoMap[conn.record.sqlHashCode].part.execTime += ttime - conn.record.startQueryTime;
 
 	record()->sqlInfoMap[conn.record.sqlHashCode].part.fail++;
-	record()->clientQueryMap[conn.clins->get_addressHashCode()].part.queryFailNum++;
-	record()->clientQueryMap[conn.clins->get_addressHashCode()].add_failSqlList(conn.record.sqlHashCode);
+	record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.queryFailNum++;
+	record()->clientQueryMap[conn.clins()->get_addressHashCode()].add_failSqlList(conn.record.sqlHashCode);
 }

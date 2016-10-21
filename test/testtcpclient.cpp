@@ -49,6 +49,7 @@ void TestTcpClient::test_getBackendConnection() {
 
 void TestTcpClient::test_sqlserver()
 {
+#ifdef NOT_IN_GITHUB
 	TcpClient tcpClient;
 	SystemApi::init_networkEnv();
 
@@ -92,4 +93,5 @@ void TestTcpClient::test_sqlserver()
 
 
 	TEST_ASSERT(true);
+#endif
 }

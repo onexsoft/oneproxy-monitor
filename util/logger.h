@@ -50,7 +50,8 @@
 		Logger::get_logger()->log_hex((char*)name, buf, bufLen); \
 }while(0)
 #define logs_buf_force(name, buf, bufLen) do{\
-	Logger::get_logger()->log_hex((char*)name, buf, bufLen);\
+	if (Logger::get_logger()->get_logLevel() <= Logger::DEBUG) \
+		Logger::get_logger()->log_hex((char*)name, buf, bufLen);\
 }while(0)
 #define logs_logsql(fmt, args...) do{\
 		if (Logger::get_logger()->get_logSql()) \

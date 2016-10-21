@@ -32,7 +32,6 @@
 
 #include "thread.h"
 #include "networksocket.h"
-#include "tcpclient.h"
 #include "record.h"
 #include "ioevent.h"
 #include "connection.h"
@@ -53,6 +52,8 @@ private:
 	void get_serverFailed(Connection *con);
 	int alloc_server(Connection* con);
 	int parse_frontDataPacket(Connection* con);
+	//从数据库组中分配数据库
+	int get_databaseFromGroup(Connection& con);
 
 	void handle_readBackendData(unsigned int fd);
 	int parse_backendDataPacket(Connection* con);
@@ -60,6 +61,8 @@ private:
 	//当isFront为true时，表示向前端套接字写数据，否则表示向后端套接字写数据
 	void write_data(Connection& con, bool isFront);
 	Connection* get_connection(unsigned int fd);
+
+
 
 	static thread_start_func(start);
 	static void rw_frontData(unsigned int fd, unsigned int events, void* args);
@@ -71,7 +74,6 @@ private:
 	ConnectManager *connManager;
 	ConnectionTypeMap connectTypeMap;
 	MutexLock clientLock;
-	TcpClient tcpClient;
 };
 
 #endif /* CLIENTTHREAD_H_ */

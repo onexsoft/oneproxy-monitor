@@ -34,6 +34,7 @@
 #include "sslogin.h"
 
 void TestTcpServer::test_server() {
+#ifdef NOT_IN_GITHUB
 	SystemApi::init_networkEnv();
 
 	config()->handle_args(0, NULL);
@@ -60,7 +61,7 @@ void TestTcpServer::test_server() {
 		std::string password = std::string("0000");
 		std::string defaultDBName = std::string("master");
 		loginParam.init_loginClientParam(*cs, userName, password,
-				defaultDBName, 4096, 0x0c, 0x00, 0x07, 0xd0, verTDS74);
+				defaultDBName, 4096, 0x0c, 0x00, 0x07, 0xd0, verTDS74, true);
 
 		uif(!login.login_client(loginParam)) {
 			loginParam.print();
@@ -72,5 +73,5 @@ void TestTcpServer::test_server() {
 	cs->closeSocket(cs->get_fd());
 	it->closeSocket(it->get_fd());
 	SystemApi::clear_networkEnv();
-
+#endif
 }
