@@ -1,0 +1,4 @@
+[error][7480][connectmanager.cpp start 232]start to connect  manager...
+[error][3468][./protocol/sqlserver/sslogin.cpp login_client 110]read login7 packet error
+[error][2732][./protocol/sqlserver/sslogin.cpp login_client 110]read login7 packet error
+[error][3468][./protocol/sqlserver/sslogin.cpp login_client 110]read login7 packet error
