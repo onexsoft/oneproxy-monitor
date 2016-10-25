@@ -90,7 +90,7 @@ public:
 	}
 	~NetworkSocket() {
 		if (m_fd) {
-			logs(Logger::INFO, "close fd(%d)", m_fd);
+			logs(Logger::DEBUG, "close fd(%d)", m_fd);
 			closeSocket(m_fd);
 			m_fd = 0;
 		}
@@ -112,6 +112,7 @@ public:
 	int write_data(StringBuf& buf);
 	void save_data(StringBuf& buf);
 	void closeSocket(unsigned int fd);
+	void clear_dataBuf();
 
 private:
 	declare_class_member(unsigned int, fd)

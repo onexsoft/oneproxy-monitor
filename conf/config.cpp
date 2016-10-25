@@ -146,6 +146,7 @@ Config::Config()
 	add_oneproxyConfig("threadnum", "0", &Config::cvtInt, &Config::set_threadNum);
 	add_oneproxyConfig("clientusername", "admin", &Config::cvtString, &Config::set_clientUserName);
 	add_oneproxyConfig("clientpassword", "0000", &Config::cvtString, &Config::set_clientPassword);
+	add_oneproxyConfig("passwordseparate", "true", &Config::cvtBool, &Config::set_passwordSeparate);
 #undef add_oneproxyConfig
 
 #define add_dbConfig(db, key, defaultv, cvtf, setf) add_config(db, key, defaultv, (CVTFunc)cvtf, (SetFunc)setf)
@@ -248,6 +249,7 @@ void Config::print_config()
 	logs(Logger::INFO, "threadNum: %d", this->m_threadNum);
 	logs(Logger::INFO, "clientUserName: %s", this->m_clientUserName.c_str());
 	logs(Logger::INFO, "clientPassword: %s", this->m_clientPassword.c_str());
+	logs(Logger::INFO, "passwordseparate: %d", this->m_passwordSeparate);
 
 	std::vector<DataBase>::iterator it = dbVector.begin();
 	for (; it != dbVector.end(); ++it) {
@@ -392,6 +394,7 @@ int Config::handle_args(int argc, char* argv[])
 		"--vip_ifname             the vip network adapter name, for example: eth0:0\n"
 		"--vip_address            the vip address\n"
 		"--threadnum              the number of worker threads\n"
+		"--passwordseparate       the client and middle software use different password(default: true)\n"
 		"Notice: If you need config database, you must use database_host, database_classname,\n"
 		"database_username, database_password at the same time.\n"
 		;
@@ -408,6 +411,7 @@ int Config::handle_args(int argc, char* argv[])
 			{"vip_ifname", required_argument, NULL, 'g'},
 			{"vip_address", required_argument, NULL, 'G'},
 			{"help", no_argument, NULL, 'h'},
+			{"passwordseparate", required_argument, NULL, 'L'},
 			{"keepalive", no_argument, NULL, 'k'},
 			{"maxconnectnum", required_argument, NULL, 'm'},
 			{"oneproxy_port", required_argument, NULL, 'p'},
@@ -479,6 +483,13 @@ int Config::handle_args(int argc, char* argv[])
 				break;
 			case 'e':
 				dbg.set_className(std::string(optarg));
+				break;
+			case 'L':
+				if (strncmp(optarg, "true", 4)) {
+					config()->set_passwordSeparate(true);
+				} else {
+					config()->set_passwordSeparate(false);
+				}
 				break;
 			case 'm':
 				config()->set_maxConnectNum(atoi(optarg));

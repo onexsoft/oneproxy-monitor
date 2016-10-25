@@ -56,6 +56,7 @@ public:
 	static int stringbuf_vsnprintf(char *buf, size_t buflen, const char *format, va_list ap);
 	static int string2wstring(const std::string& str, std::wstring& wstr);
 	static int wstring2string(const std::wstring& wstr, std::string& str);
+	static std::string int2string(int i);
 
 	/*
 	 * @desc 查找指定目录下的一个文件，如果有多个目标文件，指需要返回第一个目标文件即可

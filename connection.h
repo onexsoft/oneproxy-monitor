@@ -30,9 +30,11 @@
 #define CONNECTION_H_
 
 #include "networksocket.h"
+#include "conf/config.h"
 #include <iostream>
 #include <set>
-#include "conf/config.h"
+#include <map>
+
 
 typedef enum _query_type_t{
 	QUERY_TYPE_INIT,
@@ -143,6 +145,11 @@ typedef struct _socket_set_t{
 	}
 } SocketSet;
 
+typedef struct _session_data_t{
+	std::map<unsigned int, unsigned int> preparedHandleMap;
+}SessionData;
+
+
 class ProtocolBase;
 typedef struct _connection_t {
 	SocketSet sock;
@@ -151,7 +158,7 @@ typedef struct _connection_t {
 	DoingRecord record;
 	u_uint64 createConnTime;//millsecond
 	AutoPointer pointer;
-
+	SessionData sessData;
 	_connection_t() {
 		this->protocolBase = NULL;
 		this->createConnTime = 0;

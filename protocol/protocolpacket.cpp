@@ -53,8 +53,10 @@ int ProtocolPacket::get_dataByLen(StringBuf& stringBuf, u_uint8* buf, unsigned i
 		return -1;
 	}
 
-	uif (buf == NULL)
+	uif (buf == NULL) {
+		logs(Logger::ERR, "buf == NULL");
 		return -1;
+	}
 
 	memmove((void*)buf, (void*)(stringBuf.addr() + stringBuf.get_offset()), len);
 	stringBuf.set_offset(stringBuf.get_offset() + len);

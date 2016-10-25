@@ -68,9 +68,7 @@ int ClientThread::add_task(NetworkSocket* ns)
 
 	logs(Logger::INFO, "add client fd(%d) to ioevent", ns->get_fd());
 	if (this->ioEvent->add_ioEventRead(ns->get_fd(), ClientThread::rw_frontData, this)) {
-		clientLock.lock();
-		this->connectTypeMap.erase(ns->get_fd());
-		clientLock.unlock();
+		this->remove_connectFdRelation(ns->get_fd());
 		delete conn;
 		return -1;
 	}
@@ -142,41 +140,48 @@ void ClientThread::finished_connection(Connection *con)
 	NetworkSocket *ssns = con->sock.slavers;
 	NetworkSocket *csns = con->sock.curservs;
 
+	if (cns == NULL || cns->get_fd() <= 0)
+		return;
+
 	if (csns) {//explain the client already get server connection
 		u_uint64 endTime = SystemApi::system_millisecond();
 		record()->clientQueryMap[cns->get_addressHashCode()].part.onLineTime
 				+= (endTime - con->createConnTime);
 	}
+	if (cns != NULL && csns != NULL) {
+		logs(Logger::DEBUG, "close client(%d) =====> server(%d)", cns->get_fd(), csns->get_fd());
+	} else if (cns != NULL) {
+		logs(Logger::DEBUG, "close client(%d)", cns->get_fd());
+	} else {
+		logs(Logger::DEBUG, "close client(%d)", csns->get_fd());
+	}
+
+#define close_fds_tmp(sock) do{\
+	this->ioEvent->del_ioEvent(sock->get_fd());\
+	this->remove_connectFdRelation(sock->get_fd());\
+	delete sock;\
+	sock = NULL;\
+}while(0)
 
 	if (cns) {
+		logs(Logger::DEBUG, "close client socked(%d)", cns->get_fd());
 		//记录当前为离线
 		record()->clientQueryMap[cns->get_addressHashCode()].part.onLineStatus = false;
 		record()->clientQueryMap[cns->get_addressHashCode()].part.start_connect_time = 0;//断开连接时，设置为0.再排序时，排在最后
-		this->ioEvent->del_ioEvent(cns->get_fd());
 		this->connManager->finished_task(this->get_threadId(), cns);
-		clientLock.lock();
-		this->connectTypeMap.erase(cns->get_fd());
-		logs(Logger::INFO, "remove fd(%d) to connectTypeMap(%d)", cns->get_fd(), this->connectTypeMap.size());
-		clientLock.unlock();
-		delete cns;
+		close_fds_tmp(cns);
 	}
-
 	if (msns) {
-		this->ioEvent->del_ioEvent(msns->get_fd());
-		clientLock.lock();
-		this->connectTypeMap.erase(msns->get_fd());
-		logs(Logger::INFO, "remove fd(%d) to connectTypeMap(%d)", msns->get_fd(), this->connectTypeMap.size());
-		clientLock.unlock();
-		delete msns;
+		logs(Logger::DEBUG, "close master socked(%d)", msns->get_fd());
+		close_fds_tmp(msns);
+	} else {
+		logs(Logger::DEBUG, "msns == NULL");
 	}
-
 	if (ssns) {
-		this->ioEvent->del_ioEvent(ssns->get_fd());
-		clientLock.lock();
-		this->connectTypeMap.erase(ssns->get_fd());
-		logs(Logger::INFO, "remove fd(%d) to connectTypeMap(%d)", ssns->get_fd(), this->connectTypeMap.size());
-		clientLock.unlock();
-		delete ssns;
+		logs(Logger::DEBUG, "close slave socket(%d)", ssns->get_fd());
+		close_fds_tmp(ssns);
+	} else {
+		logs(Logger::DEBUG, "ssns == NULL");
 	}
 
 	if (con->protocolBase != NULL) {
@@ -357,7 +362,7 @@ void ClientThread::write_data(Connection& con, bool isFront)
 	do {
 		//先写上次没有发送完毕的数据
 		uif (sendData.get_remailLength() > 0) {
-			logs(Logger::INFO, "send data : %d", sendData.get_remailLength());
+			logs(Logger::INFO, "send data : %d bytes", sendData.get_remailLength());
 			ret = desSocket.write_data(sendData);
 			if (ret == 1) {//无法写入数据
 				desSocket.save_data(data);
@@ -397,12 +402,24 @@ void ClientThread::write_data(Connection& con, bool isFront)
 
 Connection* ClientThread::get_connection(unsigned int fd)
 {
+	Connection* conn = NULL;
+	this->clientLock.lock();
 	ClientThread::ConnectionTypeMap::iterator it = this->connectTypeMap.find(fd);
-	if (it == this->connectTypeMap.end()) {
+	if (it != this->connectTypeMap.end()) {
+		conn = it->second;
+	} else {
 		logs(Logger::INFO, "no fd(%d) in connectTypeMap(%d)", fd, this->connectTypeMap.size());
-		return NULL;
 	}
-	return it->second;
+	this->clientLock.unlock();
+	return conn;
+}
+
+void ClientThread::remove_connectFdRelation(unsigned int fd)
+{
+	this->clientLock.lock();
+	this->connectTypeMap.erase(fd);
+	logs(Logger::INFO, "remove fd(%d) to connectTypeMap(size:%d)", fd, this->connectTypeMap.size());
+	this->clientLock.unlock();
 }
 
 void ClientThread::rw_frontData(unsigned int fd, unsigned int events, void* args)

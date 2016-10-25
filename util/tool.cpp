@@ -36,6 +36,7 @@
 #include <stdarg.h>
 #include <iostream>
 #include <string.h>
+#include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <algorithm>
@@ -282,6 +283,15 @@ int Tool::wstring2string(const std::wstring& wstr, std::string& str)
 		}
 	}
 	return 0;
+}
+
+std::string Tool::int2string(int i)
+{
+	std::stringstream ss;
+	std::string result;
+	ss << i;
+	ss >> result;
+	return result;
 }
 
 std::string Tool::search_oneFile(std::string dirStr, std::string fileType)

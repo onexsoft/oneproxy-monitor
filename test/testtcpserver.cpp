@@ -32,6 +32,7 @@
 #include "systemapi.h"
 #include "sspacket.h"
 #include "sslogin.h"
+#include "tcpclient.h"
 
 void TestTcpServer::test_server() {
 #ifdef NOT_IN_GITHUB
@@ -51,7 +52,7 @@ void TestTcpServer::test_server() {
 		}
 
 		SSLogin login;
-		if(login.login_init(INIT_SERVER_ENV)) {
+		if(login.login_init(INIT_ALL_ENV)) {
 			logs(Logger::FATAL, "init login error");
 			return ;
 		}
@@ -60,14 +61,32 @@ void TestTcpServer::test_server() {
 		std::string userName = std::string("sa");
 		std::string password = std::string("0000");
 		std::string defaultDBName = std::string("master");
-		loginParam.init_loginClientParam(*cs, userName, password,
+		loginParam.init_loginClientParam(cs, userName, password,
 				defaultDBName, 4096, 0x0c, 0x00, 0x07, 0xd0, verTDS74, true);
 
-		uif(!login.login_client(loginParam)) {
+		NetworkSocket sns(std::string("127.0.0.1"), 9999);
+		TcpClient tcpClient;
+		if (tcpClient.get_backendConnection(&sns)) {
+			TEST_ASSERT(false);
+			return;
+		}
+		LoginParam serverParam;
+		std::string hostName = std::string("HUIH");
+		std::string appName = std::string("Microsoft JDBC Driver for SQL Server");
+		std::string serverName = std::string("127.0.0.1");
+		std::string ctlIntName = std::string("Microsoft JDBC Driver 4.0");
+		std::string database = std::string("sqldb");
+		std::string userName1 = std::string("sa");
+		std::string password1 = std::string("0000");
+		serverParam.init_loginServerParam(&sns, userName1, password1, hostName, appName,
+				serverName, ctlIntName, database, 8000, verTDS74);
+
+		uif(!login.login_redirect(loginParam, serverParam)) {
 			loginParam.print();
 			system("pause");
 			break;
 		}
+		sns.closeSocket(sns.get_fd());
 	}
 
 	cs->closeSocket(cs->get_fd());

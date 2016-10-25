@@ -151,16 +151,25 @@ int ProtocolBase::protocol_getBackendConnect(Connection& conn)
 		return -1;
 	}
 
-	NetworkSocket* sns = NULL;
+	NetworkSocket* ns = NULL;
 	if (conn.servns() == NULL) {
-		sns = new NetworkSocket(conn.curdb()->get_addr(), conn.curdb()->get_port());
-		conn.servns() = sns;
-		if (tcpClient.get_backendConnection(sns)
+		ns = new NetworkSocket(conn.curdb()->get_addr(), conn.curdb()->get_port());
+		conn.servns() = ns;
+		if (tcpClient.get_backendConnection(ns)
 				|| this->protocol_initBackendConnect(conn)) {
 			logs(Logger::ERR, "connection to backend error(address: %s, port:%d)",
-					sns->get_address().c_str(), sns->get_port());
+					ns->get_address().c_str(), ns->get_port());
 			return -1;
 		}
+		if (conn.curdb() == conn.database.masterDataBase) {
+			conn.sock.masters = ns;
+		} else if (conn.curdb() == conn.database.slaveDataBase){
+			conn.sock.slavers = ns;
+		} else {
+			logs(Logger::ERR, "unkown database type, addr: %s, port: %d",
+					conn.curdb()->get_addr().c_str(), conn.curdb()->get_port());
+		}
+		logs(Logger::INFO, "server fd: %d", ns->get_fd());
 	}
 	return 0;
 }
@@ -229,24 +238,25 @@ int ProtocolBase::protocol_clearBackendStatPacket(Connection& conn)
 	return 0;
 }
 //保存prepared handle与sqlhashcode的关系
-void ProtocolBase::save_preparedSqlHashCode(unsigned int preparedHandle, unsigned int sqlHashCode)
+void ProtocolBase::save_preparedSqlHashCode(Connection& conn,
+		unsigned int preparedHandle, unsigned int sqlHashCode)
 {
 	logs(Logger::INFO, "preparedHandle: %u, sqlHashCode: %u", preparedHandle, sqlHashCode);
-	this->preparedHandleMap[preparedHandle] = sqlHashCode;
+	conn.sessData.preparedHandleMap[preparedHandle] = sqlHashCode;
 }
 
-unsigned int ProtocolBase::find_preparedSqlHashCode(unsigned int preparedHandle)
+unsigned int ProtocolBase::find_preparedSqlHashCode(Connection& conn, unsigned int preparedHandle)
 {
-	std::map<unsigned int, unsigned int>::iterator it = this->preparedHandleMap.find(preparedHandle);
-	if (it == this->preparedHandleMap.end())
+	std::map<unsigned int, unsigned int>::iterator it = conn.sessData.preparedHandleMap.find(preparedHandle);
+	if (it == conn.sessData.preparedHandleMap.end())
 		return (unsigned int)-1;
 	else
 		return it->second;
 }
 
-void ProtocolBase::remove_preparedSqlHashCode(unsigned int preparedHandle)
+void ProtocolBase::remove_preparedSqlHashCode(Connection& conn, unsigned int preparedHandle)
 {
-	this->preparedHandleMap.erase(preparedHandle);
+	conn.sessData.preparedHandleMap.erase(preparedHandle);
 }
 
 //返回sqlParser对象
@@ -491,7 +501,7 @@ int ProtocolBase::stat_parseAndStatSql(Connection& conn, std::string sqlText)
 int ProtocolBase::stat_preparedSql(Connection& conn, unsigned int preparedHandle)
 {
 	//find sqlHashCode;
-	conn.record.sqlHashCode = this->find_preparedSqlHashCode(preparedHandle);
+	conn.record.sqlHashCode = this->find_preparedSqlHashCode(conn, preparedHandle);
 	uif (conn.record.sqlHashCode == (unsigned int)-1) {
 		logs(Logger::ERR, "preparedHandle(%d) no sql", preparedHandle);
 		return -1;

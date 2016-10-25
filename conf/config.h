@@ -159,6 +159,7 @@ class Config: public ConfigBase{
 	declare_class_member(int, threadNum)
 	declare_class_member(std::string, clientUserName)
 	declare_class_member(std::string, clientPassword)
+	declare_class_member(bool, passwordSeparate)
 
 	declare_cvt_func(cvtString)
 	declare_cvt_func(cvtInt)

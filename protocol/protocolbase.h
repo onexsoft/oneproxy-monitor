@@ -86,7 +86,7 @@ public:
 	virtual void destoryInstance() = 0;
 
 private:
-	std::map<unsigned int, unsigned int> preparedHandleMap;
+//	std::map<unsigned int, unsigned int> preparedHandleMap;
 	SqlParser sqlParser;
 
 	//定义函数处理map
@@ -118,9 +118,9 @@ protected:
 	virtual int protocol_clearBackendStatPacket(Connection& conn);
 
 	//保存prepared handle与sqlhashcode的关系
-	virtual void save_preparedSqlHashCode(unsigned int preparedHandle, unsigned int sqlHashCode);
-	virtual unsigned int find_preparedSqlHashCode(unsigned int preparedHandle);
-	virtual void remove_preparedSqlHashCode(unsigned int preparedHandle);
+	virtual void save_preparedSqlHashCode(Connection& conn, unsigned int preparedHandle, unsigned int sqlHashCode);
+	virtual unsigned int find_preparedSqlHashCode(Connection& conn, unsigned int preparedHandle);
+	virtual void remove_preparedSqlHashCode(Connection& conn, unsigned int preparedHandle);
 
 	//返回sqlParser对象
 	SqlParser& get_sqlParser();

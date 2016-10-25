@@ -100,7 +100,6 @@
 	}\
 }while(0)
 
-
 #define quick_parse_stringBuf(packet, stringBuf, readLength, errorMsg) do{\
 	if (readLength < 0) {\
 		logs(Logger::ERR, "read length (%d) < 0 error", readLength);\

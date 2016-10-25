@@ -356,7 +356,6 @@ int NetworkSocket::read_dataonBlock()
 	return 0;
 }
 
-
 int NetworkSocket::write_data(StringBuf& buf)
 {
 	uif (buf.get_remailLength() <= 0) {
@@ -391,3 +390,8 @@ void NetworkSocket::closeSocket(unsigned int fd)
 	SystemApi::close(fd);
 }
 
+void NetworkSocket::clear_dataBuf()
+{
+	this->m_recvData.clear();
+	this->m_sendData.clear();
+}

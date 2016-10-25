@@ -61,6 +61,7 @@ private:
 	//当isFront为true时，表示向前端套接字写数据，否则表示向后端套接字写数据
 	void write_data(Connection& con, bool isFront);
 	Connection* get_connection(unsigned int fd);
+	void remove_connectFdRelation(unsigned int fd);
 
 
 
