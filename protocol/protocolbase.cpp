@@ -503,7 +503,7 @@ int ProtocolBase::stat_preparedSql(Connection& conn, unsigned int preparedHandle
 	//find sqlHashCode;
 	conn.record.sqlHashCode = this->find_preparedSqlHashCode(conn, preparedHandle);
 	uif (conn.record.sqlHashCode == (unsigned int)-1) {
-		logs(Logger::ERR, "preparedHandle(%d) no sql", preparedHandle);
+		logs(Logger::DEBUG, "preparedHandle(%d) no sql", preparedHandle);
 		return -1;
 	}
 	Record::SqlInfo& sqlInfo = record()->sqlInfoMap[conn.record.sqlHashCode];
