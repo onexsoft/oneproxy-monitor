@@ -111,3 +111,25 @@ void TestTool::test_wstring2string()
 	logs_buf_force("dd", (void*)dd.c_str(), dd.length());
 }
 
+void findSqlKeyWord(std::string src, std::string dst)
+{
+	logs(Logger::INFO, "ignorecase:: src: %s, dst: %s, pos: %d", src.c_str(), dst.c_str(),
+				Tool::find_sqlKeyWord(src, dst, true));
+
+	logs(Logger::INFO, "ignorecase:: src: %s, dst: %s, pos: %d", src.c_str(), dst.c_str(),
+					Tool::find_sqlKeyWord(src, dst, false));
+}
+
+void TestTool::test_findSqlKeyWord()
+{
+	findSqlKeyWord("BEGIN TRANS;select * from bigtable", "BeGin");
+	findSqlKeyWord("BEGINTRANS;select * from bigtable", "BeGin");
+	findSqlKeyWord("BEGIN", "BeGin");
+	findSqlKeyWord("begin", "BeGin");
+	findSqlKeyWord("begin;", "BeGin");
+	findSqlKeyWord("select * from bigtable;begin;", "BeGin");
+	findSqlKeyWord("select * from bigtable;begin;select * from bigtable;", "BeGin");
+	findSqlKeyWord("select * from bigtable;\'begin\';select * from bigtable;", "BeGin");
+	findSqlKeyWord("select * from bigtable;\'begin     dsfsadfsa  \';select * from bigtable;", "BeGin");
+}
+

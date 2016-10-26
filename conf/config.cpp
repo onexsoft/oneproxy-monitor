@@ -147,6 +147,7 @@ Config::Config()
 	add_oneproxyConfig("clientusername", "admin", &Config::cvtString, &Config::set_clientUserName);
 	add_oneproxyConfig("clientpassword", "0000", &Config::cvtString, &Config::set_clientPassword);
 	add_oneproxyConfig("passwordseparate", "true", &Config::cvtBool, &Config::set_passwordSeparate);
+	add_oneproxyConfig("readwritestrategy", "0", &Config::cvtInt, &Config::set_readWriteStrategy);
 #undef add_oneproxyConfig
 
 #define add_dbConfig(db, key, defaultv, cvtf, setf) add_config(db, key, defaultv, (CVTFunc)cvtf, (SetFunc)setf)
@@ -250,6 +251,7 @@ void Config::print_config()
 	logs(Logger::INFO, "clientUserName: %s", this->m_clientUserName.c_str());
 	logs(Logger::INFO, "clientPassword: %s", this->m_clientPassword.c_str());
 	logs(Logger::INFO, "passwordseparate: %d", this->m_passwordSeparate);
+	logs(Logger::INFO, "readwritestrategy: %d", this->m_readWriteStrategy);
 
 	std::vector<DataBase>::iterator it = dbVector.begin();
 	for (; it != dbVector.end(); ++it) {
@@ -395,6 +397,7 @@ int Config::handle_args(int argc, char* argv[])
 		"--vip_address            the vip address\n"
 		"--threadnum              the number of worker threads\n"
 		"--passwordseparate       the client and middle software use different password(default: true)\n"
+		"--readwritestrategy      the read or write strategy(default: master)\n"
 		"Notice: If you need config database, you must use database_host, database_classname,\n"
 		"database_username, database_password at the same time.\n"
 		;
@@ -412,6 +415,7 @@ int Config::handle_args(int argc, char* argv[])
 			{"vip_address", required_argument, NULL, 'G'},
 			{"help", no_argument, NULL, 'h'},
 			{"passwordseparate", required_argument, NULL, 'L'},
+			{"readwritestrategy", required_argument, NULL, 'l'},
 			{"keepalive", no_argument, NULL, 'k'},
 			{"maxconnectnum", required_argument, NULL, 'm'},
 			{"oneproxy_port", required_argument, NULL, 'p'},
@@ -490,6 +494,9 @@ int Config::handle_args(int argc, char* argv[])
 				} else {
 					config()->set_passwordSeparate(false);
 				}
+				break;
+			case 'l':
+				config()->set_readWriteStrategy(atoi(optarg));
 				break;
 			case 'm':
 				config()->set_maxConnectNum(atoi(optarg));

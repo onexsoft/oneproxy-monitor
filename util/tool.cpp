@@ -357,3 +357,48 @@ std::string Tool::search_oneFile(std::string dirStr, std::string fileType)
 
 	return result;
 }
+
+int Tool::find_sqlKeyWord(const std::string& src, const std::string& dst, bool ignoreCase)
+{
+	if (src.length() < dst.length())
+		return -1;
+
+	char* dch = (char*)dst.c_str();
+	char* uch = NULL;
+	char* lch = NULL;
+	bool startCharacter = false;
+	int findPos = -1;
+	std::string upperStr = dst;
+	std::string lowerStr = dst;
+	unsigned int di = 0;
+
+	if (ignoreCase) {
+		Tool::toupper(upperStr);
+		Tool::tolower(lowerStr);
+		uch = (char*)upperStr.c_str();
+		lch = (char*)lowerStr.c_str();
+		logs(Logger::INFO, "uch: %s, lch: %s", uch, lch);
+	}
+	char* ch = (char*)src.c_str();
+
+	for (unsigned int i = 0; i < src.length(); ++i) {
+		if (ch[i] == '\'' && (i == 0 || (ch[i-1] != '\\'))) {
+			startCharacter = (startCharacter == false ? true : false);
+			continue;
+		}
+		if (startCharacter)
+			continue;
+
+		if ((ignoreCase && (ch[i] == uch[di] || ch[i] == lch[di])) || (ch[i] == dch[di])) {
+			if (findPos == -1)
+				findPos = i;
+			if ((di == (dst.length() - 1)) && ((i >= (src.length() - 1)) || src[i + 1] == ' ' || src[i + 1] == ';'))
+				break;
+			di = di + 1;
+		} else {
+			di = 0;
+			findPos = -1;
+		}
+	}
+	return findPos;
+}

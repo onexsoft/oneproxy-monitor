@@ -30,52 +30,61 @@
 #define CONNECTION_H_
 
 #include "networksocket.h"
+#include "record_define.h"
 #include "conf/config.h"
 #include <iostream>
 #include <set>
 #include <map>
 
-
 typedef enum _query_type_t{
 	QUERY_TYPE_INIT,
+
 	SIMPLE_QUERY_TYPE,
+	SIMPLE_QUERY_SELECT_TYPE,
+	SIMPLE_QUERY_SUM,
+
 	TRANS_QUERY_TYPE,
+	TRANS_QUERY_BEGIN_TYPE,
+	TRANS_QUERY_COMMIT_TYPE,
+	TRANS_QUERY_ROLLBACK_TYPE,
+	TRANS_QUERY_SUM,
 
-	QUERY_TYPE_SUM
-}QueryType;
+	QUERY_TYPE_SUM,
+} QueryType;
 
-typedef enum _translation_type_t{
-	TRANS_NOTIN_TYPE, //非事务
-	TRANS_BEGIN_TYPE,
-	TRANS_COMMIT_TYPE,
-	TRANS_ROLLBACK_TYPE,
-}TranslationType;
+typedef struct _sql_info_t{
+	unsigned int sqlHashCode; //sql hash code
+	std::string sqlText; // sqlparse modifyed sql.
+	unsigned int tableCount;//the table count in sql text.
+	stats::SqlOp queryType; //query type
+	std::vector<std::string> tableNameVec; //table name vector
+	_sql_info_t() {
+		this->sqlHashCode = 0;
+		this->tableCount = 0;
+		this->queryType = stats::sql_op_init;
+	}
+} SqlInfo;
 
 typedef struct _doing_record_t{
-	unsigned int sqlHashCode;//正在处理sql的hashCode
-	std::string sqlText; //正在处理sql
+	SqlInfo sqlInfo;//current sql info.
+
 	u_uint64 startQueryTime;
 	u_uint64 totalRow; //当前执行sql返回的行数
-//	std::string startQueryTimeStr;
 
 	//for translation
 	std::set<unsigned int> sqlSet; //the sql in trans
-	u_uint64 totalTime; //事务的总格时间
+	u_uint64 totalTime; //事务的总共时间
 	u_uint64 trans_start_time;//毫秒级别
-//	time_t transStartTime; //事务的开始时间，秒级别
 	bool rollback; //记录当前事务是否rollback
 	QueryType type;
-	TranslationType transFlag;//标记当前是不是在事务中
 
 	_doing_record_t() {
-		this->sqlHashCode = 0;
 		this->startQueryTime = 0;
 		this->totalRow = 0;
 		this->totalTime = 0;
 		this->trans_start_time = 0;
 		this->rollback = false;
 		type = QUERY_TYPE_INIT;
-		transFlag = TRANS_NOTIN_TYPE;
 	}
 }DoingRecord;
 
@@ -147,8 +156,7 @@ typedef struct _socket_set_t{
 
 typedef struct _session_data_t{
 	std::map<unsigned int, unsigned int> preparedHandleMap;
-}SessionData;
-
+} SessionData;
 
 class ProtocolBase;
 typedef struct _connection_t {

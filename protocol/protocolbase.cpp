@@ -146,11 +146,32 @@ void ProtocolBase::protocol_backend(Connection& conn)
 
 int ProtocolBase::protocol_getBackendConnect(Connection& conn)
 {
-	uif (conn.curdb() == NULL) {
-		logs(Logger::ERR, "current database is NULL");
-		return -1;
+	//1. choose database
+	this->protocol_chooseDatabase(conn);
+
+	//2. create socket.
+	return this->protocol_createBackendConnect(conn);
+}
+
+int ProtocolBase::protocol_chooseDatabase(Connection& conn)
+{
+	if ((conn.record.type == SIMPLE_QUERY_SELECT_TYPE) && (conn.database.slaveDataBase != NULL)) {
+		conn.database.currentDataBase = conn.database.slaveDataBase;
+	} else {
+		conn.database.currentDataBase = conn.database.masterDataBase;
 	}
 
+	if (conn.database.currentDataBase == conn.database.masterDataBase) {
+		conn.sock.curservs = conn.sock.masters;
+	} else {
+		conn.sock.curservs = conn.sock.slavers;
+	}
+	return 0;
+}
+
+int ProtocolBase::protocol_createBackendConnect(Connection& conn)
+{
+	assert(conn.curdb() != NULL);
 	NetworkSocket* ns = NULL;
 	if (conn.servns() == NULL) {
 		ns = new NetworkSocket(conn.curdb()->get_addr(), conn.curdb()->get_port());
@@ -162,14 +183,16 @@ int ProtocolBase::protocol_getBackendConnect(Connection& conn)
 			return -1;
 		}
 		if (conn.curdb() == conn.database.masterDataBase) {
+			logs(Logger::INFO, "current use master database");
 			conn.sock.masters = ns;
 		} else if (conn.curdb() == conn.database.slaveDataBase){
+			logs(Logger::INFO, "current use slave database");
 			conn.sock.slavers = ns;
 		} else {
 			logs(Logger::ERR, "unkown database type, addr: %s, port: %d",
 					conn.curdb()->get_addr().c_str(), conn.curdb()->get_port());
 		}
-		logs(Logger::INFO, "server fd: %d", ns->get_fd());
+		logs(Logger::DEBUG, "server fd: %d", ns->get_fd());
 	}
 	return 0;
 }
@@ -248,10 +271,13 @@ void ProtocolBase::save_preparedSqlHashCode(Connection& conn,
 unsigned int ProtocolBase::find_preparedSqlHashCode(Connection& conn, unsigned int preparedHandle)
 {
 	std::map<unsigned int, unsigned int>::iterator it = conn.sessData.preparedHandleMap.find(preparedHandle);
-	if (it == conn.sessData.preparedHandleMap.end())
+	if (it == conn.sessData.preparedHandleMap.end()){
+		logs(Logger::ERR, "not find sql hash code, preparedHandle: %u", preparedHandle);
 		return (unsigned int)-1;
-	else
+	}
+	else {
 		return it->second;
+	}
 }
 
 void ProtocolBase::remove_preparedSqlHashCode(Connection& conn, unsigned int preparedHandle)
@@ -267,33 +293,45 @@ SqlParser& ProtocolBase::get_sqlParser()
 
 unsigned int ProtocolBase::get_currentSqlHashCode(Connection& conn)
 {
-	return conn.record.sqlHashCode;
+	return conn.record.sqlInfo.sqlHashCode;
 }
 
 std::string& ProtocolBase::get_currentSqlText(Connection& conn)
 {
-	return conn.record.sqlText;
-}
-
-//此函数只是简单的调用解析器的parse函数，其他的事情不做。用户可以通过获取到sqlparser对象来获取其他的信息
-int ProtocolBase::parse_sql(std::string sqlText)
-{
-	if(this->sqlParser.parse(sqlText.c_str()) == false){
-		logs(Logger::ERR, "sql parser parse sql error");
-		return -1;
-	}
-	return 0;
+	return conn.record.sqlInfo.sqlText;
 }
 
 //此函数中调用parse函数后，并且通过解析器修改sql语句，通过modifySqlText返回替换sql语句的中的值为?后的sql语句。
-int ProtocolBase::parse_sql(std::string sqlText, std::string& modifySqlText)
+int ProtocolBase::parse_sql(Connection& conn, std::string sqlText)
 {
-	if(this->sqlParser.parse(sqlText.c_str()) == false){
+	if(this->sqlParser.parse(sqlText.c_str()) == false) {
 		logs(Logger::ERR, "sql parser parse sql error");
 		return -1;
 	}
 
-	this->sqlParser.toPatternQuery(modifySqlText);
+	this->sqlParser.toPatternQuery(conn.record.sqlInfo.sqlText);
+
+	conn.record.sqlInfo.queryType = (stats::SqlOp)this->sqlParser.queryType();
+	conn.record.sqlInfo.tableCount = this->sqlParser.tableCount();
+
+	//save table name
+	conn.record.sqlInfo.tableNameVec.clear();
+	for (unsigned int i = 0; i < conn.record.sqlInfo.tableCount; ++i) {
+		const char* tmpTable = this->sqlParser.table(i)->table;
+		conn.record.sqlInfo.tableNameVec.push_back(std::string(tmpTable, strlen(tmpTable)));
+	}
+
+	if (this->sqlParser.isStartTrans()) {
+		logs(Logger::INFO, "start trans");
+		conn.record.type = TRANS_QUERY_BEGIN_TYPE;
+	} else if (this->sqlParser.isCommit()) {
+		conn.record.type = TRANS_QUERY_COMMIT_TYPE;
+		logs(Logger::INFO, "COMMIT TRANS");
+	} else if (this->sqlParser.isRollBack()) {
+		conn.record.type = TRANS_QUERY_ROLLBACK_TYPE;
+		logs(Logger::INFO, "ROLLBACK trans");
+	}
+
 	return 0;
 }
 
@@ -309,7 +347,8 @@ void ProtocolBase::stat_readBackendData(Connection& conn)
 {
 	record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.downDataSize
 			+= conn.servns()->get_recvData().get_length();
-	record()->sqlInfoMap[conn.record.sqlHashCode].part.recvSize += conn.servns()->get_recvData().get_length();
+	record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode].part.recvSize
+			+= conn.servns()->get_recvData().get_length();
 }
 
 //开始事务
@@ -318,8 +357,7 @@ void ProtocolBase::stat_startTrans(Connection& conn)
 	//record translation start data
 	logs(Logger::INFO, "stat start trans");
 	conn.record.trans_start_time = conn.record.startQueryTime;
-//	conn.record.transStartTimeStr = conn.record.startQueryTimeStr;
-	conn.record.sqlSet.insert(conn.record.sqlHashCode);
+	conn.record.sqlSet.insert(conn.record.sqlInfo.sqlHashCode);
 	conn.record.type = TRANS_QUERY_TYPE;
 }
 
@@ -327,87 +365,74 @@ void ProtocolBase::stat_startTrans(Connection& conn)
 void ProtocolBase::stat_endTrans(Connection& conn, bool isRollBack)
 {
 	logs(Logger::INFO, "stat end trans");
-	if (isRollBack) {
-		conn.record.rollback = true;
-	}
+	do{
+		if (isRollBack) {
+			conn.record.rollback = true;
+		}
 
-	std::string hashCodeKeys;
-	{
-		std::set<unsigned int>::iterator it = conn.record.sqlSet.begin();
-		for(; it != conn.record.sqlSet.end(); ++it) {
-			if (hashCodeKeys.size() > 0) {
-				hashCodeKeys.append(";");
+		std::string hashCodeKeys;
+		{
+			std::set<unsigned int>::iterator it = conn.record.sqlSet.begin();
+			for(; it != conn.record.sqlSet.end(); ++it) {
+				if (hashCodeKeys.size() > 0) {
+					hashCodeKeys.append(";");
+				}
+				hashCodeKeys.append(Tool::itoa(*it));
 			}
-			hashCodeKeys.append(Tool::itoa(*it));
 		}
-	}
 
-	if (hashCodeKeys.size() <= 0)
-		return;
+		if (hashCodeKeys.size() <= 0)
+			break;
 
-	u_uint64 transHashCode = Tool::quick_hash_code(hashCodeKeys.c_str(), hashCodeKeys.length());
-	u_uint64 finishedTime = SystemApi::system_millisecond();
+		u_uint64 transHashCode = Tool::quick_hash_code(hashCodeKeys.c_str(), hashCodeKeys.length());
+		u_uint64 finishedTime = SystemApi::system_millisecond();
 
-	Record::TransInfo& info = record()->transInfoMap[transHashCode];
-	info.part.transHashCode = transHashCode;
-	info.lastTime = conn.record.trans_start_time;
-	info.part.exec ++;
-	info.part.lastTime = finishedTime - conn.record.trans_start_time;
-	if (info.part.lastTime > info.part.maxTime) {
-		info.part.maxTime = info.part.lastTime;
-	}
-	if (info.part.lastTime < info.part.minTime) {
-		info.part.minTime = info.part.lastTime;
-	}
-	info.part.sqlNum = conn.record.sqlSet.size();
-	info.part.totalTime += info.part.lastTime;
-
-	if (conn.record.rollback) {
-		info.part.rollbackTimes++;
-	}
-
-	{
-		std::set<unsigned int>::iterator it = conn.record.sqlSet.begin();
-		for(; it != conn.record.sqlSet.end(); ++it) {
-			info.sqlHashCode.insert(*it);
+		Record::TransInfo& info = record()->transInfoMap[transHashCode];
+		info.part.transHashCode = transHashCode;
+		info.lastTime = conn.record.trans_start_time;
+		info.part.exec ++;
+		info.part.lastTime = finishedTime - conn.record.trans_start_time;
+		if (info.part.lastTime > info.part.maxTime) {
+			info.part.maxTime = info.part.lastTime;
 		}
-	}
-	conn.record.sqlSet.clear();
-	conn.record.type = SIMPLE_QUERY_TYPE;
+		if (info.part.lastTime < info.part.minTime) {
+			info.part.minTime = info.part.lastTime;
+		}
+		info.part.sqlNum = conn.record.sqlSet.size();
+		info.part.totalTime += info.part.lastTime;
+
+		if (conn.record.rollback) {
+			info.part.rollbackTimes++;
+		}
+
+		{
+			std::set<unsigned int>::iterator it = conn.record.sqlSet.begin();
+			for(; it != conn.record.sqlSet.end(); ++it) {
+				info.sqlHashCode.insert(*it);
+			}
+		}
+		conn.record.sqlSet.clear();
+	}while(0);
+	conn.record.type = QUERY_TYPE_INIT;
 }
 
 void ProtocolBase::stat_saveSql(Connection& conn, std::string& sqlText)
 {
-	conn.record.sqlText = sqlText;
-	conn.record.sqlHashCode = Tool::quick_hash_code(conn.record.sqlText.c_str(), conn.record.sqlText.length());
+	conn.record.sqlInfo.sqlText = sqlText;
+	conn.record.sqlInfo.sqlHashCode = Tool::quick_hash_code(sqlText.c_str(), sqlText.length());
 
-	if (this->sqlParser.isStartTrans()) {
-		logs(Logger::INFO, "start trans");
-		conn.record.transFlag = TRANS_BEGIN_TYPE;
-	} else if (this->sqlParser.isCommit()) {
-		conn.record.transFlag = TRANS_COMMIT_TYPE;
-		logs(Logger::INFO, "COMMIT TRANS");
-	} else if (this->sqlParser.isRollBack()) {
-		conn.record.transFlag = TRANS_ROLLBACK_TYPE;
-		logs(Logger::INFO, "ROLLBACK trans");
-	} else {
-		conn.record.transFlag = TRANS_NOTIN_TYPE;
-		logs(Logger::INFO, "NOTIN trans");
-	}
-
-	Record::SqlInfo& sqlInfo = record()->sqlInfoMap[conn.record.sqlHashCode];
+	Record::SqlInfo& sqlInfo = record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode];
 	if (sqlInfo.part.hashCode == 0) {
-		sqlInfo.part.hashCode = conn.record.sqlHashCode;
-		sqlInfo.sqlText = conn.record.sqlText;
-		sqlInfo.part.tabs = this->sqlParser.tableCount();
-		sqlInfo.part.type =  (Record::SqlOp)this->sqlParser.queryType();
+		sqlInfo.part.hashCode = conn.record.sqlInfo.sqlHashCode;
+		sqlInfo.sqlText = conn.record.sqlInfo.sqlText;
+		sqlInfo.part.tabs = conn.record.sqlInfo.tableCount;
+		sqlInfo.part.type =  (Record::SqlOp)conn.record.sqlInfo.queryType;
 		record()->clientQueryMap[conn.clins()->get_addressHashCode()].add_sqlList(sqlInfo.part.hashCode);
 		sqlInfo.add_clientSet(conn.clins()->get_addressHashCode());
 
-		//get table info
+		//set table info
 		for (unsigned int i = 0; i < sqlInfo.part.tabs; ++i) {
-			const char* tmpTable = this->sqlParser.table(i)->table;
-			sqlInfo.add_tableSet(std::string(tmpTable, strlen(tmpTable)));
+			sqlInfo.add_tableSet(conn.record.sqlInfo.tableNameVec.at(i));
 		}
 	}
 }
@@ -424,7 +449,6 @@ void ProtocolBase::stat_executeSql(Connection& conn, std::string& sqlText)
 
 int ProtocolBase::stat_parseSql(Connection& conn, std::string& sqlText)
 {
-	conn.record.sqlText.clear();
 	logs_logsql("%s", sqlText.c_str());
 	if (sqlText.length() <= 0) {
 		logs(Logger::INFO, "sqltext is empty");
@@ -432,13 +456,12 @@ int ProtocolBase::stat_parseSql(Connection& conn, std::string& sqlText)
 	}
 
 	//1. 解析sql语句
-	std::string tmpstr;
-	if (this->parse_sql(sqlText, tmpstr)) {
+	if (this->parse_sql(conn, sqlText)) {
 		return -1;
 	}
 
 	//2. record
-	this->stat_saveSql(conn, tmpstr);
+	this->stat_saveSql(conn, conn.record.sqlInfo.sqlText);
 	return 0;
 }
 
@@ -447,13 +470,12 @@ void ProtocolBase::stat_executeSql(Connection& conn)
 {
 	//record time
 	conn.record.startQueryTime = SystemApi::system_millisecond();
-//	conn.record.startQueryTimeStr = SystemApi::system_timeStr();
 	conn.record.totalRow = 0;
 
-	if (conn.record.sqlHashCode <= 0)
+	if (conn.record.sqlInfo.sqlHashCode <= 0)
 		return;
 
-	Record::SqlInfo& sqlInfo = record()->sqlInfoMap[conn.record.sqlHashCode];
+	Record::SqlInfo& sqlInfo = record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode];
 	sqlInfo.part.exec++;
 
 	//record client
@@ -469,31 +491,23 @@ void ProtocolBase::stat_executeSql(Connection& conn)
 	}
 
 	//in trans.
-	if (conn.record.type == TRANS_QUERY_TYPE) {
-		conn.record.sqlSet.insert(conn.record.sqlHashCode);
-		record()->sqlInfoMap[conn.record.sqlHashCode].part.trans++;
-	} else if (conn.record.type == QUERY_TYPE_INIT) {
-		conn.record.type = SIMPLE_QUERY_TYPE;
+	if (conn.record.type >= TRANS_QUERY_TYPE && conn.record.type < TRANS_QUERY_SUM) {
+		conn.record.sqlSet.insert(conn.record.sqlInfo.sqlHashCode);
+		record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode].part.trans++;
 	}
 }
 
 int ProtocolBase::stat_parseAndStatSql(Connection& conn, std::string sqlText)
 {
-	conn.record.sqlText.clear();
-	logs_logsql("%s", sqlText.c_str());
-	if (sqlText.length() <= 0) {
-		logs(Logger::INFO, "sqltext is empty");
-		return 0;
-	}
+	conn.record.sqlInfo.sqlText.clear();
 
 	//1. 解析sql语句
-	std::string tmpstr;
-	if (this->parse_sql(sqlText, tmpstr)) {
+	if (this->parse_sql(conn, sqlText)) {
 		return -1;
 	}
 
 	//2. 统计sql语句
-	this->stat_executeSql(conn, tmpstr);
+	this->stat_executeSql(conn, conn.record.sqlInfo.sqlText);
 
 	return 0;
 }
@@ -501,13 +515,13 @@ int ProtocolBase::stat_parseAndStatSql(Connection& conn, std::string sqlText)
 int ProtocolBase::stat_preparedSql(Connection& conn, unsigned int preparedHandle)
 {
 	//find sqlHashCode;
-	conn.record.sqlHashCode = this->find_preparedSqlHashCode(conn, preparedHandle);
-	uif (conn.record.sqlHashCode == (unsigned int)-1) {
-		logs(Logger::DEBUG, "preparedHandle(%d) no sql", preparedHandle);
+	conn.record.sqlInfo.sqlHashCode = this->find_preparedSqlHashCode(conn, preparedHandle);
+	uif (conn.record.sqlInfo.sqlHashCode == (unsigned int)-1) {
+		logs(Logger::ERR, "preparedHandle(%d) no sql", preparedHandle);
 		return -1;
 	}
-	Record::SqlInfo& sqlInfo = record()->sqlInfoMap[conn.record.sqlHashCode];
-	conn.record.sqlText = sqlInfo.sqlText;
+	Record::SqlInfo& sqlInfo = record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode];
+	conn.record.sqlInfo.sqlText = sqlInfo.sqlText;
 	logs_logsql("prepare sql: %s, preparedHandle: %u", sqlInfo.sqlText.c_str(), preparedHandle);
 
 	this->stat_executeSql(conn);
@@ -526,11 +540,11 @@ void ProtocolBase::stat_recvOneRow(Connection& conn)
 void ProtocolBase::stat_recvFinishedRow(Connection& conn, unsigned int rows)
 {
 	time_t ttime = SystemApi::system_millisecond();
-	record()->sqlInfoMap[conn.record.sqlHashCode].part.execTime += ttime - conn.record.startQueryTime;
+	record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode].part.execTime += ttime - conn.record.startQueryTime;
 	if ((conn.record.totalRow != rows) && (rows != 0)) {
-		record()->sqlInfoMap[conn.record.sqlHashCode].part.totalRow += rows;
+		record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode].part.totalRow += rows;
 	} else {
-		record()->sqlInfoMap[conn.record.sqlHashCode].part.totalRow += conn.record.totalRow;
+		record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode].part.totalRow += conn.record.totalRow;
 	}
 	conn.record.totalRow = 0;
 }
@@ -539,9 +553,9 @@ void ProtocolBase::stat_recvFinishedRow(Connection& conn, unsigned int rows)
 void ProtocolBase::stat_executeErr(Connection& conn)
 {
 	time_t ttime = SystemApi::system_millisecond();
-	record()->sqlInfoMap[conn.record.sqlHashCode].part.execTime += ttime - conn.record.startQueryTime;
+	record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode].part.execTime += ttime - conn.record.startQueryTime;
 
-	record()->sqlInfoMap[conn.record.sqlHashCode].part.fail++;
+	record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode].part.fail++;
 	record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.queryFailNum++;
-	record()->clientQueryMap[conn.clins()->get_addressHashCode()].add_failSqlList(conn.record.sqlHashCode);
+	record()->clientQueryMap[conn.clins()->get_addressHashCode()].add_failSqlList(conn.record.sqlInfo.sqlHashCode);
 }

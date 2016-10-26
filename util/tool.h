@@ -65,6 +65,9 @@ public:
 	 * @return 查找到的文件名称
 	 * */
 	static std::string search_oneFile(std::string dir, std::string fileType);
+
+	//在src中查找dst,根据ignoreCase来决定是否忽略大小写,返回在src中的位置，如果不存在则返回-1
+	static int find_sqlKeyWord(const std::string& src, const std::string& dst, bool ignoreCase);
 };
 
 #endif /* PROTOCOL_TOOL_H_ */

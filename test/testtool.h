@@ -34,9 +34,10 @@
 class TestTool : public Test::Suite{
 public:
 	TestTool() {
-		TEST_ADD(TestTool::test_wstringFormat);
+//		TEST_ADD(TestTool::test_wstringFormat);
 //		TEST_ADD(TestTool::test_string2wstring);
 //		TEST_ADD(TestTool::test_wstring2string);
+		TEST_ADD(TestTool::test_findSqlKeyWord);
 	}
 	virtual ~TestTool() {
 
@@ -45,6 +46,7 @@ private:
 	void test_wstringFormat();
 	void test_string2wstring();
 	void test_wstring2string();
+	void test_findSqlKeyWord();
 };
 
 #endif /* TEST_TESTTOOL_H_ */

@@ -86,7 +86,6 @@ public:
 	virtual void destoryInstance() = 0;
 
 private:
-//	std::map<unsigned int, unsigned int> preparedHandleMap;
 	SqlParser sqlParser;
 
 	//定义函数处理map
@@ -97,6 +96,8 @@ private:
 
 protected:
 	virtual int protocol_initBackendConnect(Connection& conn) {return 0;}
+	virtual int protocol_chooseDatabase(Connection& conn);
+	virtual int protocol_createBackendConnect(Connection& conn);
 
 	//调用此函数，返回包的类型，及注册函数的key值，由于每种数据库包类型长度不同，位置不同，故需要协议部分实现
 	virtual int get_packetType(StringBuf& packet) = 0;
@@ -128,10 +129,8 @@ protected:
 	unsigned int get_currentSqlHashCode(Connection& conn);
 	//返回当前正在执行的sql语句
 	std::string& get_currentSqlText(Connection& conn);
-	//此函数只是简单的调用解析器的parse函数，其他的事情不做。用户可以通过获取到sqlparser对象来获取其他的信息
-	virtual int parse_sql(std::string sqlText);
-	//此函数中调用parse函数后，并且通过解析器修改sql语句，通过modifySqlText返回替换sql语句的中的值为?后的sql语句。
-	virtual int parse_sql(std::string sqlText, std::string& modifySqlText);
+	//此函数中调用parse对象解析sql语句，并且把信息保存到conn.record.sqlinfo中
+	virtual int parse_sql(Connection& conn, std::string sqlText);
 
 	//统计读取到前端的数据
 	virtual void stat_readFrontData(Connection& conn);

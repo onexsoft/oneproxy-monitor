@@ -65,7 +65,6 @@ const int cf_listen_backlog = 128;
 #define strncasecmp_s(str1, str2) strncasecmp(str1.c_str(), str2.c_str(), str2.length())
 #define cmpdata(type, first, oper, second) ((type)(first) oper (type)(second))
 
-
 #define unlikely(x) __builtin_expect(!!(x), 0)
 #define likely(x) __builtin_expect(!!(x), 1)
 #define uif(x) if (unlikely(x))
