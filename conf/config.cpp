@@ -147,7 +147,7 @@ Config::Config()
 	add_oneproxyConfig("clientusername", "admin", &Config::cvtString, &Config::set_clientUserName);
 	add_oneproxyConfig("clientpassword", "0000", &Config::cvtString, &Config::set_clientPassword);
 	add_oneproxyConfig("passwordseparate", "true", &Config::cvtBool, &Config::set_passwordSeparate);
-	add_oneproxyConfig("readwritestrategy", "0", &Config::cvtInt, &Config::set_readWriteStrategy);
+	add_oneproxyConfig("readslave", "true", &Config::cvtBool, &Config::set_readSlave);
 #undef add_oneproxyConfig
 
 #define add_dbConfig(db, key, defaultv, cvtf, setf) add_config(db, key, defaultv, (CVTFunc)cvtf, (SetFunc)setf)
@@ -251,7 +251,7 @@ void Config::print_config()
 	logs(Logger::INFO, "clientUserName: %s", this->m_clientUserName.c_str());
 	logs(Logger::INFO, "clientPassword: %s", this->m_clientPassword.c_str());
 	logs(Logger::INFO, "passwordseparate: %d", this->m_passwordSeparate);
-	logs(Logger::INFO, "readwritestrategy: %d", this->m_readWriteStrategy);
+	logs(Logger::INFO, "readSlave: %d", this->m_readSlave);
 
 	std::vector<DataBase>::iterator it = dbVector.begin();
 	for (; it != dbVector.end(); ++it) {
@@ -326,6 +326,13 @@ int Config::handle_config()
 		logs(Logger::ERR, "no database group error");
 		return -1;
 	}
+
+	//如果采用读写分离，则必须进行前后端密码分离
+	if (this->get_readSlave() && !this->get_passwordSeparate()) {
+		logs(Logger::ERR, "when read slave, the password separate must be true, error");
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -397,7 +404,7 @@ int Config::handle_args(int argc, char* argv[])
 		"--vip_address            the vip address\n"
 		"--threadnum              the number of worker threads\n"
 		"--passwordseparate       the client and middle software use different password(default: true)\n"
-		"--readwritestrategy      the read or write strategy(default: master)\n"
+		"--readSlave              when not in trans. read from slave database(default: true).\n"
 		"Notice: If you need config database, you must use database_host, database_classname,\n"
 		"database_username, database_password at the same time.\n"
 		;
@@ -415,7 +422,7 @@ int Config::handle_args(int argc, char* argv[])
 			{"vip_address", required_argument, NULL, 'G'},
 			{"help", no_argument, NULL, 'h'},
 			{"passwordseparate", required_argument, NULL, 'L'},
-			{"readwritestrategy", required_argument, NULL, 'l'},
+			{"readsalve", required_argument, NULL, 'l'},
 			{"keepalive", no_argument, NULL, 'k'},
 			{"maxconnectnum", required_argument, NULL, 'm'},
 			{"oneproxy_port", required_argument, NULL, 'p'},
@@ -496,7 +503,11 @@ int Config::handle_args(int argc, char* argv[])
 				}
 				break;
 			case 'l':
-				config()->set_readWriteStrategy(atoi(optarg));
+				if (strncmp(optarg, "true", 4)){
+					config()->set_readSlave(true);
+				} else {
+					config()->set_readSlave(false);
+				}
 				break;
 			case 'm':
 				config()->set_maxConnectNum(atoi(optarg));

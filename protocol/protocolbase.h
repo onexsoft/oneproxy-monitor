@@ -32,8 +32,8 @@
 * 4. prehandle_backendPacket:与prehandle_frontPacket相同。不同的点是，这个函数针对接收到的后端数据包
 * 5. protocol_initFrontStatPacket: 默认实现只是把bufpointer的指针指向接收到的数据包。如果在进行执行处理函数前，需要针对数据进行修改，那么需要实现此函数。
 * 6. protocol_initBackendStatPacket: 与protocol_initFrontStatPacket函数功能相同，不同点是，这个针对后端数据包。
-* 7. protocol_clearFrontStatPacket:当执行完协议类注册的处理函数后，执行此函数。默认实现是空的。
-* 8. protocol_clearBackendStatPacket:功能与protocol_clearFrontStatPacket相同，不同的是这个函数针对后端数据包的处理。
+* 7. protocol_endFrontStatPacket:当执行完协议类注册的处理函数后，执行此函数。默认实现是空的。
+* 8. protocol_endBackendStatPacket:功能与protocol_endFrontStatPacket相同，不同的是这个函数针对后端数据包的处理。
 * All rights Reserved, Designed By huih
 * @Company: onexsoft
 * @Author: hui
@@ -115,13 +115,8 @@ protected:
 	//下面的两个函数是调用用户注册的处理函数前需要调用的，目的是让用户操作需要处理的数据，比如:sql server中需要跳过头部等。
 	virtual int protocol_initFrontStatPacket(Connection& conn);
 	virtual int protocol_initBackendStatPacket(Connection& conn);
-	virtual int protocol_clearFrontStatPacket(Connection& conn);
-	virtual int protocol_clearBackendStatPacket(Connection& conn);
-
-	//保存prepared handle与sqlhashcode的关系
-	virtual void save_preparedSqlHashCode(Connection& conn, unsigned int preparedHandle, unsigned int sqlHashCode);
-	virtual unsigned int find_preparedSqlHashCode(Connection& conn, unsigned int preparedHandle);
-	virtual void remove_preparedSqlHashCode(Connection& conn, unsigned int preparedHandle);
+	virtual int protocol_endFrontStatPacket(Connection& conn);
+	virtual int protocol_endBackendStatPacket(Connection& conn);
 
 	//返回sqlParser对象
 	SqlParser& get_sqlParser();

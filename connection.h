@@ -32,6 +32,7 @@
 #include "networksocket.h"
 #include "record_define.h"
 #include "conf/config.h"
+#include "handlemanager.h"
 #include <iostream>
 #include <set>
 #include <map>
@@ -44,9 +45,14 @@ typedef enum _query_type_t{
 	SIMPLE_QUERY_SUM,
 
 	TRANS_QUERY_TYPE,
+	TRANS_QUERY_TRANS_ON_TYPE,
+	TRANS_QUERY_TRANS_OFF_TYPE,
+	TRANS_QUERY_TRANS_ON_COMMIT_TYPE,
+	TRANS_QUERY_TRANS_ON_ROLLBACK_TYPE,
 	TRANS_QUERY_BEGIN_TYPE,
 	TRANS_QUERY_COMMIT_TYPE,
 	TRANS_QUERY_ROLLBACK_TYPE,
+	TRANS_QUERY_FINISHED_TYPE,//finished trans.
 	TRANS_QUERY_SUM,
 
 	QUERY_TYPE_SUM,
@@ -155,7 +161,7 @@ typedef struct _socket_set_t{
 } SocketSet;
 
 typedef struct _session_data_t{
-	std::map<unsigned int, unsigned int> preparedHandleMap;
+	HandleManager preparedCursorManager;
 } SessionData;
 
 class ProtocolBase;
@@ -174,6 +180,7 @@ typedef struct _connection_t {
 #define clins() sock.curclins
 #define servns() sock.curservs
 #define curdb() database.currentDataBase
+#define handleManager() sessData.preparedCursorManager
 } Connection;
 
 #endif /* CONNECTION_H_ */

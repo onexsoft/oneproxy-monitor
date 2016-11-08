@@ -37,6 +37,13 @@
 #include "config.h"
 #include "tool.h"
 
+#define close_fds(sock) do{\
+	this->ioEvent->del_ioEvent(sock->get_fd());\
+	this->remove_connectFdRelation(sock->get_fd());\
+	delete sock;\
+	sock = NULL;\
+}while(0)
+
 ClientThread::ClientThread(ConnectManager* connManager, std::string threadName)
 	:Thread(thread_type_client, threadName),
 	 ioEvent(IoEvent::get_instance(std::string("clientThread_ioEvent"))),
@@ -90,6 +97,7 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 
 	//2.read data from front socket
 	NetworkSocket *cns = con->clins();
+	StringBuf& cnsRecvBuf = cns->get_recvData();
 	if (cns == NULL) {
 		logs(Logger::ERR, "cns is null");
 		return;
@@ -98,9 +106,11 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 		this->finished_connection(con);
 		return;
 	}
-	if (cns->get_recvData().get_length() == 0) {
+	if (cnsRecvBuf.get_length() == 0) {
 		return;
 	}
+	logs(Logger::INFO, "send (%d) bytes data to backend", cnsRecvBuf.get_length());
+	logs_buf((char*)"front =====> backend", (void*)cnsRecvBuf.get_buf(), cnsRecvBuf.get_length());
 
 	//3. analyse current data
 	if (this->parse_frontDataPacket(con)) {
@@ -113,7 +123,7 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 	}
 
 	//4.check: Have data need send to server or not
-	if (cns->get_recvData().get_remailLength() <= 0) {
+	if (cnsRecvBuf.get_remailLength() <= 0) {
 		if (cns->get_sendData().get_remailLength() > 0) {//maybe have data need send to client
 			this->write_data(*con, true);
 		}
@@ -125,9 +135,6 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 		logs(Logger::ERR, "connect to server error");
 		return;
 	}
-
-	logs(Logger::INFO, "send (%d) bytes data to backend", cns->get_recvData().get_length());
-	logs_buf((char*)"front =====> backend", (void*)cns->get_recvData().get_buf(), cns->get_recvData().get_length());
 
 	//5. write data to server
 	this->write_data(*con, false);
@@ -156,30 +163,23 @@ void ClientThread::finished_connection(Connection *con)
 		logs(Logger::DEBUG, "close client(%d)", csns->get_fd());
 	}
 
-#define close_fds_tmp(sock) do{\
-	this->ioEvent->del_ioEvent(sock->get_fd());\
-	this->remove_connectFdRelation(sock->get_fd());\
-	delete sock;\
-	sock = NULL;\
-}while(0)
-
 	if (cns) {
 		logs(Logger::DEBUG, "close client socked(%d)", cns->get_fd());
 		//记录当前为离线
 		record()->clientQueryMap[cns->get_addressHashCode()].part.onLineStatus = false;
 		record()->clientQueryMap[cns->get_addressHashCode()].part.start_connect_time = 0;//断开连接时，设置为0.再排序时，排在最后
 		this->connManager->finished_task(this->get_threadId(), cns);
-		close_fds_tmp(cns);
+		close_fds(cns);
 	}
 	if (msns) {
 		logs(Logger::DEBUG, "close master socked(%d)", msns->get_fd());
-		close_fds_tmp(msns);
+		close_fds(msns);
 	} else {
 		logs(Logger::DEBUG, "msns == NULL");
 	}
 	if (ssns) {
 		logs(Logger::DEBUG, "close slave socket(%d)", ssns->get_fd());
-		close_fds_tmp(ssns);
+		close_fds(ssns);
 	} else {
 		logs(Logger::DEBUG, "ssns == NULL");
 	}
@@ -188,19 +188,18 @@ void ClientThread::finished_connection(Connection *con)
 		con->protocolBase->destoryInstance();
 	}
 	delete con;
-
 	record()->record_threadFinishedConn(this->get_threadId());
 }
 
 void ClientThread::get_serverFailed(Connection *con)
 {
-	if (con->sock.masters != NULL){
-		delete con->sock.masters;
-		con->sock.masters = NULL;
+	if (con->sock.masters != NULL) {
+		logs(Logger::DEBUG, "delete master socket: %d", con->sock.masters->get_fd());
+		close_fds(con->sock.masters);
 	}
 	if (con->sock.slavers != NULL){
-		delete con->sock.slavers;
-		con->sock.slavers = NULL;
+		logs(Logger::DEBUG, "delete slavers socket: %d", con->sock.slavers->get_fd());
+		close_fds(con->sock.slavers);
 	}
 
 	con->clins()->get_socketRecord().connServerFailed();
@@ -321,6 +320,11 @@ void ClientThread::handle_readBackendData(unsigned int fd)
 
 	//4. write data to front
 	this->write_data(*con, true);
+
+	//5. if the send data have data, need to write.
+	if (con->servns() != NULL && con->servns()->get_sendData().get_remailLength() > 0) {
+		this->write_data(*con, false);
+	}
 }
 
 int ClientThread::parse_backendDataPacket(Connection* con) {
@@ -393,6 +397,7 @@ void ClientThread::write_data(Connection& con, bool isFront)
 			return;
 		} else {//写数据完毕
 			logs(Logger::INFO, "write finished ...");
+			this->ioEvent->add_ioEventRead(desSocket.get_fd(), func, this);
 			break;
 		}
 	} while(0);
@@ -446,8 +451,10 @@ void ClientThread::rw_backendData(unsigned int fd, unsigned int events, void *ar
 
 	logs(Logger::INFO, "backend fd(%d) have data to read, events(%d)", fd, events);
 	if (ct->ioEvent->is_readEvent(events)) {
+		logs(Logger::DEBUG, "is_readEvent");
 		ct->handle_readBackendData(fd);
 	} else if (ct->ioEvent->is_writeEvent(events)) {
+		logs(Logger::DEBUG, "is_writeEvent");
 		Connection* con = NULL;
 		if ((con = ct->get_connection(fd)) == NULL) {
 			logs(Logger::ERR, "no fd(%d) in connectTypeMap", fd);

@@ -377,7 +377,6 @@ int Tool::find_sqlKeyWord(const std::string& src, const std::string& dst, bool i
 		Tool::tolower(lowerStr);
 		uch = (char*)upperStr.c_str();
 		lch = (char*)lowerStr.c_str();
-		logs(Logger::INFO, "uch: %s, lch: %s", uch, lch);
 	}
 	char* ch = (char*)src.c_str();
 

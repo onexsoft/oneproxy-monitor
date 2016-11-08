@@ -359,10 +359,10 @@ int NetworkSocket::read_dataonBlock()
 int NetworkSocket::write_data(StringBuf& buf)
 {
 	uif (buf.get_remailLength() <= 0) {
-		logs(Logger::INFO, "no data in buf to write to fd(%d)", this->m_fd);
 		return 0;
 	}
 
+//	logs_buf("xxx write_data", (char*)(buf.addr() + buf.get_offset()), buf.get_remailLength());
 	int len = 0;
 	while(buf.get_remailLength() > 0) {
 		len = send(this->m_fd, (char*)(buf.addr() + buf.get_offset()), buf.get_remailLength(), 0);

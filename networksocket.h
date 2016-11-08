@@ -65,10 +65,19 @@ typedef struct socket_record{
 
 typedef struct socket_attach_data_t{
 	declare_class_member(unsigned int, listenPort) //客户端的socket是从哪个监听端口来的。
+	void* pointer; //用于各个协议成自行保存数据
+	FreeFunc pointer_desFunc; //pointer的内存释放函数
 	socket_attach_data_t(){
 		this->m_listenPort = 0;
+		this->pointer = NULL;
+		this->pointer_desFunc = NULL;
 	}
-}AttachData;
+	~socket_attach_data_t() {
+		if (pointer != NULL && pointer_desFunc != NULL) {
+			(*pointer_desFunc)(pointer);
+		}
+	}
+}SocketAttachData;
 
 class NetworkSocket{
 
@@ -130,7 +139,7 @@ private:
 	declare_class_member(StringBuf*, bufPointer)
 
 	declare_class_member_co(Addr, addr)
-	declare_class_member_co(AttachData, attachData)
+	declare_class_member_co(SocketAttachData, attachData)
 };
 
 #endif /* NETWORKSOCKET_H_ */

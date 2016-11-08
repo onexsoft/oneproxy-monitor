@@ -60,6 +60,7 @@ int ProtocolPacket::get_dataByLen(StringBuf& stringBuf, u_uint8* buf, unsigned i
 
 	memmove((void*)buf, (void*)(stringBuf.addr() + stringBuf.get_offset()), len);
 	stringBuf.set_offset(stringBuf.get_offset() + len);
+	logs(Logger::DEBUG, "len: %d", len);
 	return 0;
 }
 
@@ -275,10 +276,11 @@ int ProtocolPacket::get_stringBuf1BLen(StringBuf& stringBuf, StringBuf& desStr)
 	if (dataLen <= 0)
 		return 0;
 
-	desStr.mallocMem(dataLen);
+	desStr.mallocMem(desStr.get_length() + dataLen);
 
-	quick_parse_data(stringBuf, (u_uint8*)desStr.addr(), dataLen, "read data error");
+	quick_parse_data(stringBuf, (u_uint8*)(desStr.addr() + desStr.get_length()), dataLen, "read data error");
 
+	desStr.set_length(desStr.get_length() + dataLen);
 	return 0;
 }
 

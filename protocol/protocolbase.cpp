@@ -84,7 +84,7 @@ void ProtocolBase::protocol_front(Connection& conn)
 		}
 
 		//5. 清理
-		this->protocol_clearFrontStatPacket(conn);
+		this->protocol_endFrontStatPacket(conn);
 	}while(0);
 
 	if (packet.length() > oldOffset)//when clear, the oldOffset maybe bigger than length.
@@ -96,7 +96,7 @@ void ProtocolBase::protocol_backend(Connection& conn)
 	StringBuf& packet = conn.sock.get_curServSock()->get_recvData();
 	int oldOffset = packet.get_offset();
 
-	do{
+	do {
 		//1. 累计后端得到的数据
 		this->stat_readBackendData(conn);
 
@@ -138,7 +138,7 @@ void ProtocolBase::protocol_backend(Connection& conn)
 		}
 
 		//5. 清理
-		this->protocol_clearBackendStatPacket(conn);
+		this->protocol_endBackendStatPacket(conn);
 	} while(0);
 
 	packet.set_offset(oldOffset);
@@ -155,15 +155,21 @@ int ProtocolBase::protocol_getBackendConnect(Connection& conn)
 
 int ProtocolBase::protocol_chooseDatabase(Connection& conn)
 {
-	if ((conn.record.type == SIMPLE_QUERY_SELECT_TYPE) && (conn.database.slaveDataBase != NULL)) {
-		conn.database.currentDataBase = conn.database.slaveDataBase;
+	if (config()->get_readSlave()){
+		if ((conn.record.type == SIMPLE_QUERY_SELECT_TYPE) && (conn.database.slaveDataBase != NULL)) {
+			conn.database.currentDataBase = conn.database.slaveDataBase;
+		} else {
+			conn.database.currentDataBase = conn.database.masterDataBase;
+		}
 	} else {
 		conn.database.currentDataBase = conn.database.masterDataBase;
 	}
 
 	if (conn.database.currentDataBase == conn.database.masterDataBase) {
 		conn.sock.curservs = conn.sock.masters;
+		logs(Logger::DEBUG, "current use master database");
 	} else {
+		logs(Logger::DEBUG, "current use slave database");
 		conn.sock.curservs = conn.sock.slavers;
 	}
 	return 0;
@@ -175,6 +181,7 @@ int ProtocolBase::protocol_createBackendConnect(Connection& conn)
 	NetworkSocket* ns = NULL;
 	if (conn.servns() == NULL) {
 		ns = new NetworkSocket(conn.curdb()->get_addr(), conn.curdb()->get_port());
+		logs(Logger::DEBUG, "server address: %s, port: %d", ns->get_address().c_str(), ns->get_port());
 		conn.servns() = ns;
 		if (tcpClient.get_backendConnection(ns)
 				|| this->protocol_initBackendConnect(conn)) {
@@ -251,38 +258,14 @@ int ProtocolBase::protocol_initBackendStatPacket(Connection& conn)
 	return 0;
 }
 
-int ProtocolBase::protocol_clearFrontStatPacket(Connection& conn)
+int ProtocolBase::protocol_endFrontStatPacket(Connection& conn)
 {
 	return 0;
 }
 
-int ProtocolBase::protocol_clearBackendStatPacket(Connection& conn)
+int ProtocolBase::protocol_endBackendStatPacket(Connection& conn)
 {
 	return 0;
-}
-//保存prepared handle与sqlhashcode的关系
-void ProtocolBase::save_preparedSqlHashCode(Connection& conn,
-		unsigned int preparedHandle, unsigned int sqlHashCode)
-{
-	logs(Logger::INFO, "preparedHandle: %u, sqlHashCode: %u", preparedHandle, sqlHashCode);
-	conn.sessData.preparedHandleMap[preparedHandle] = sqlHashCode;
-}
-
-unsigned int ProtocolBase::find_preparedSqlHashCode(Connection& conn, unsigned int preparedHandle)
-{
-	std::map<unsigned int, unsigned int>::iterator it = conn.sessData.preparedHandleMap.find(preparedHandle);
-	if (it == conn.sessData.preparedHandleMap.end()){
-		logs(Logger::ERR, "not find sql hash code, preparedHandle: %u", preparedHandle);
-		return (unsigned int)-1;
-	}
-	else {
-		return it->second;
-	}
-}
-
-void ProtocolBase::remove_preparedSqlHashCode(Connection& conn, unsigned int preparedHandle)
-{
-	conn.sessData.preparedHandleMap.erase(preparedHandle);
 }
 
 //返回sqlParser对象
@@ -499,6 +482,7 @@ void ProtocolBase::stat_executeSql(Connection& conn)
 
 int ProtocolBase::stat_parseAndStatSql(Connection& conn, std::string sqlText)
 {
+	logs_logsql("%s", sqlText.c_str());
 	conn.record.sqlInfo.sqlText.clear();
 
 	//1. 解析sql语句
@@ -515,11 +499,17 @@ int ProtocolBase::stat_parseAndStatSql(Connection& conn, std::string sqlText)
 int ProtocolBase::stat_preparedSql(Connection& conn, unsigned int preparedHandle)
 {
 	//find sqlHashCode;
-	conn.record.sqlInfo.sqlHashCode = this->find_preparedSqlHashCode(conn, preparedHandle);
-	uif (conn.record.sqlInfo.sqlHashCode == (unsigned int)-1) {
+	BackendHandle backendHandle;
+	uif (conn.handleManager().get_backendHandleBasePrepared(preparedHandle, backendHandle)) {
 		logs(Logger::ERR, "preparedHandle(%d) no sql", preparedHandle);
 		return -1;
 	}
+	conn.record.sqlInfo.sqlHashCode = backendHandle.hashCode;
+	if (conn.record.sqlInfo.sqlHashCode <= 0){
+		logs(Logger::ERR, "sql hash code is zero, preparedHandle: %u", preparedHandle);
+		return -1;
+	}
+
 	Record::SqlInfo& sqlInfo = record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode];
 	conn.record.sqlInfo.sqlText = sqlInfo.sqlText;
 	logs_logsql("prepare sql: %s, preparedHandle: %u", sqlInfo.sqlText.c_str(), preparedHandle);

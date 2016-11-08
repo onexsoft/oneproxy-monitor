@@ -110,7 +110,7 @@ int Epoll::add_ioEventAccept(unsigned int fd, Func func, void *args)
 bool Epoll::is_readEvent(unsigned int event)
 {
 #ifdef linux
-	return (bool)event & EPOLLIN;
+	return (bool)(event & EPOLLIN);
 #else
 	return false;
 #endif
@@ -119,7 +119,7 @@ bool Epoll::is_readEvent(unsigned int event)
 bool Epoll::is_writeEvent(unsigned int event)
 {
 #ifdef linux
-	return (bool)event & EPOLLOUT;
+	return (bool)(event & EPOLLOUT);
 #else
 	return false;
 #endif
