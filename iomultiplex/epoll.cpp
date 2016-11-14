@@ -30,7 +30,7 @@
 
 Epoll::Epoll(std::string name)
 	:IoEvent(name),
-	mutexLock("_lock", record())
+	mutexLock("_lock", NULL)
 {
 #ifndef WIN32
 	epfd = epoll_create(256);//the max handles
@@ -52,7 +52,7 @@ Epoll::~Epoll()
 int Epoll::add_ioEvent(unsigned int fd, unsigned int event, Func func, void *args)
 {
 
-	logs(Logger::INFO, "fd: %d, event: %d", fd, event);
+	logs(Logger::DEBUG, "fd: %d, event: %d", fd, event);
 #ifndef WIN32
 
 	//when event is -1. represent only monitor the fd
@@ -127,7 +127,7 @@ bool Epoll::is_writeEvent(unsigned int event)
 
 void Epoll::del_ioEvent(unsigned int fd)
 {
-	logs(Logger::INFO, "delete fd(%d) epoll event", fd);
+	logs(Logger::DEBUG, "delete fd(%d) epoll event", fd);
 	//1. delete from epoll
 #ifdef linux
 	struct epoll_event ev;
@@ -159,7 +159,7 @@ void Epoll::run_eventWait(int epollTimeout)
 
 		const EventInfo* ioet = this->get_IoEventInfo((int)events[i].data.fd);
 		if (ioet == NULL) {
-			logs(Logger::INFO, "not find fd(%d) in event map", events[i].data.fd);
+			logs(Logger::DEBUG, "not find fd(%d) in event map", events[i].data.fd);
 			continue;
 		}
 

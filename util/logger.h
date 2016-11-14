@@ -99,6 +99,7 @@ private:
 	void output(const char* hint, const char* fmt, va_list args);
 	void outputStrategy(const char* logstr);
 	void outputConsoleOrFile(const char* logstr);
+	std::string current_timeStr();
 
 private:
 #ifdef WIN32

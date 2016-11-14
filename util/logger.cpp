@@ -31,6 +31,8 @@
 #include <iostream>
 #include <fstream>
 #include <stdio.h>
+#include <string.h>
+#include <string>
 using namespace std;
 
 #ifdef WIN32
@@ -122,14 +124,14 @@ void Logger::output(const char* hint, const char* fmt, va_list args) {
 	vsnprintf(buf, 2048, fmt, args);
 
 	if (hint == NULL) {
-#if 0
-	snprintf(result, 2048, "[%s %s][%ld]%s\n",__DATE__, __TIME__, (unsigned long int)(tid), buf);
+#if 1
+	snprintf(result, 2048, "[%s][%ld]%s\n", this->current_timeStr().c_str(), (unsigned long int)(tid), buf);
 #else
 	snprintf(result, 2048, "[%ld]%s\n", (unsigned long int)(tid), buf);
 #endif
 	} else {
-#if 0
-	snprintf(result, 2048, "[%s %s][%s][%ld]%s\n",__DATE__, __TIME__, hint, (unsigned long int)(tid), buf);
+#if 1
+	snprintf(result, 2048, "[%s][%s][%ld]%s\n", this->current_timeStr().c_str(), hint, (unsigned long int)(tid), buf);
 #else
 	snprintf(result, 2048, "[%s][%ld]%s\n", hint, (unsigned long int)(tid), buf);
 #endif
@@ -220,4 +222,22 @@ void Logger::log_hex(char* name, void *data, int dataLen) {
     }
     this->log(Logger::LEVEL_SUM, "%s:%d", name, dataLen);
     this->outputConsoleOrFile(sb.c_str());
+}
+
+std::string Logger::current_timeStr()
+{
+	char buf[32];
+
+#ifdef linux
+	time_t ttime = time(NULL);
+	struct tm tm = {0};
+	localtime_r(&ttime, &tm);
+	strftime(buf, sizeof(buf), "%Y-%m-%d %X", &tm);
+#else
+	SYSTEMTIME sys;
+	GetLocalTime(&sys);
+	snprintf(buf, sizeof(buf), "%4d-%02d-%02d %02d:%02d:%02d", sys.wYear, sys.wMonth,sys.wDay,sys.wHour,sys.wMinute, sys.wSecond);
+#endif
+
+	return std::string(buf, strlen(buf));
 }

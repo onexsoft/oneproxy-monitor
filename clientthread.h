@@ -58,12 +58,11 @@ private:
 	void handle_readBackendData(unsigned int fd);
 	int parse_backendDataPacket(Connection* con);
 
+	int send_data(Connection& conn, bool sendToClient = true);
 	//当isFront为true时，表示向前端套接字写数据，否则表示向后端套接字写数据
 	void write_data(Connection& con, bool isFront);
 	Connection* get_connection(unsigned int fd);
 	void remove_connectFdRelation(unsigned int fd);
-
-
 
 	static thread_start_func(start);
 	static void rw_frontData(unsigned int fd, unsigned int events, void* args);

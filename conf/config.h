@@ -161,7 +161,9 @@ class Config: public ConfigBase{
 	declare_class_member(std::string, clientPassword)
 	declare_class_member(bool, passwordSeparate)
 	declare_class_member(bool, readSlave)
-
+	declare_class_member(bool, useConnectionPool)
+	declare_class_member(int, poolConnCheckActiveTime)
+	declare_class_member(int, poolConnTimeoutReleaseTime)
 	declare_cvt_func(cvtString)
 	declare_cvt_func(cvtInt)
 	declare_cvt_func(cvtLogger)

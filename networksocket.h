@@ -104,6 +104,12 @@ public:
 			m_fd = 0;
 		}
 	}
+	static void destroy_networkSocket(void* ns) {
+		NetworkSocket* tns = (NetworkSocket*)ns;
+		if (tns != NULL) {
+			delete tns;
+		}
+	}
 
 	int addr_pton();
 	int addr_ntop();

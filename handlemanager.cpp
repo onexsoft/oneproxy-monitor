@@ -88,7 +88,7 @@ int HandleManager::add_handle(const BackendHandle& backendHandle, FrontHandle& f
 		}
 	}
 
-	logs(Logger::DEBUG, "preparedHandle: %d, cursorHandle: %d",
+	logs(Logger::DEBUG, "preparedHandle: %u, cursorHandle: %u",
 			frontHandle.preparedHandle, frontHandle.cursorHandle);
 	this->frontBackendHandleMap[frontHandle] = backendHandle;
 
@@ -100,7 +100,7 @@ int HandleManager::add_handle(const BackendHandle& backendHandle, FrontHandle& f
 int HandleManager::get_backendHandle(FrontHandle frontHandle, BackendHandle& backendHandle)
 {
 	this->show_fbHandleMap();
-	logs(Logger::DEBUG, "preaparedHandle: %d, cursorHandle: %d",
+	logs(Logger::DEBUG, "preaparedHandle: %u, cursorHandle: %u",
 			frontHandle.preparedHandle, frontHandle.cursorHandle);
 	FBHandleMap::iterator it = this->frontBackendHandleMap.find(frontHandle);
 	if (it != this->frontBackendHandleMap.end()) {

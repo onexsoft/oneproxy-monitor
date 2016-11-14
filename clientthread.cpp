@@ -44,10 +44,17 @@
 	sock = NULL;\
 }while(0)
 
+#define close_ioEvent(sock) do{\
+	this->ioEvent->del_ioEvent(sock->get_fd());\
+	this->remove_connectFdRelation(sock->get_fd());\
+}while(0)
+
+
+
 ClientThread::ClientThread(ConnectManager* connManager, std::string threadName)
 	:Thread(thread_type_client, threadName),
 	 ioEvent(IoEvent::get_instance(std::string("clientThread_ioEvent"))),
-	 clientLock(std::string("clientThread_lock"), record())
+	 clientLock(std::string("clientThread_lock"), NULL)
 {
 	this->connManager = connManager;
 	this->startThread(ClientThread::start, this);
@@ -97,15 +104,11 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 
 	//2.read data from front socket
 	NetworkSocket *cns = con->clins();
-	StringBuf& cnsRecvBuf = cns->get_recvData();
-	if (cns == NULL) {
-		logs(Logger::ERR, "cns is null");
-		return;
-	}
 	if (cns->read_data() < 0) {
 		this->finished_connection(con);
 		return;
 	}
+	StringBuf& cnsRecvBuf = cns->get_recvData();
 	if (cnsRecvBuf.get_length() == 0) {
 		return;
 	}
@@ -114,30 +117,20 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 
 	//3. analyse current data
 	if (this->parse_frontDataPacket(con)) {
-		logs(Logger::ERR, "parse packet error");
-		if (con->database.dataBaseGroup == NULL || con->protocolBase == NULL) {
-			logs(Logger::ERR, "don't recognition the packet and current don't have database information, so close the connection");
-			this->finished_connection(con);
-			return;
-		}
-	}
-
-	//4.check: Have data need send to server or not
-	if (cnsRecvBuf.get_remailLength() <= 0) {
-		if (cns->get_sendData().get_remailLength() > 0) {//maybe have data need send to client
-			this->write_data(*con, true);
-		}
+		logs(Logger::DEBUG, "don't recognition the packet "
+				"and current don't have database information, so close the connection");
+		this->finished_connection(con);
 		return;
 	}
 
 	//4. if current socket is not connection to server, alloc server
-	if (this->alloc_server(con)) {
+	if (cnsRecvBuf.get_remailLength() > 0 && this->alloc_server(con)) {
 		logs(Logger::ERR, "connect to server error");
 		return;
 	}
 
 	//5. write data to server
-	this->write_data(*con, false);
+	this->send_data(*con, false);
 }
 
 void ClientThread::finished_connection(Connection *con)
@@ -171,22 +164,25 @@ void ClientThread::finished_connection(Connection *con)
 		this->connManager->finished_task(this->get_threadId(), cns);
 		close_fds(cns);
 	}
+
 	if (msns) {
 		logs(Logger::DEBUG, "close master socked(%d)", msns->get_fd());
-		close_fds(msns);
+		close_ioEvent(msns);
 	} else {
 		logs(Logger::DEBUG, "msns == NULL");
 	}
 	if (ssns) {
 		logs(Logger::DEBUG, "close slave socket(%d)", ssns->get_fd());
-		close_fds(ssns);
+		close_ioEvent(ssns);
 	} else {
 		logs(Logger::DEBUG, "ssns == NULL");
 	}
 
 	if (con->protocolBase != NULL) {
+		con->protocolBase->protocol_releaseBackendConnect(*con);
 		con->protocolBase->destoryInstance();
 	}
+
 	delete con;
 	record()->record_threadFinishedConn(this->get_threadId());
 }
@@ -260,13 +256,26 @@ int ClientThread::parse_frontDataPacket(Connection* con)
 				}
 				con->database.dataBaseGroup = dbg;
 				con->protocolBase = base;
-				base->protocol_front(*con);
-				return this->get_databaseFromGroup(*con);
+
+				//先选择数据库，在进行解析数据包，防止解析失败的情况
+				if (this->get_databaseFromGroup(*con)) {
+					return -1;
+				}
+
+				if (base->protocol_front(*con) == HANDLE_RETURN_FAILED_CLOSE_CONN) {
+					logs(Logger::DEBUG, "close the connection");
+					return -1;
+				}
+
+				return 0;
 			}
 		}
 		return -1;
 	} else {
-		con->protocolBase->protocol_front(*con);
+		if (con->protocolBase->protocol_front(*con) == HANDLE_RETURN_FAILED_CLOSE_CONN) {
+			logs(Logger::DEBUG, "close the connection");
+			return -1;
+		}
 	}
 	return 0;
 }
@@ -276,6 +285,7 @@ int ClientThread::get_databaseFromGroup(Connection& con)
 	if (con.database.dataBaseGroup->get_dbMasterGroupVec().size() > 0) {
 		con.database.masterDataBase = con.database.dataBaseGroup->get_dbMasterGroupVec().front();
 	} else {//必须需要master
+		logs(Logger::ERR, "no master database in config file");
 		return -1;
 	}
 
@@ -316,21 +326,51 @@ void ClientThread::handle_readBackendData(unsigned int fd)
 	//3. parse backend packet
 	if (this->parse_backendDataPacket(con)) {
 		logs(Logger::ERR, "parse packet error");
+		finished_connection(con);
+		return ;
 	}
 
-	//4. write data to front
-	this->write_data(*con, true);
-
-	//5. if the send data have data, need to write.
-	if (con->servns() != NULL && con->servns()->get_sendData().get_remailLength() > 0) {
-		this->write_data(*con, false);
-	}
+	//4. send data
+	this->send_data(*con, true);
 }
 
 int ClientThread::parse_backendDataPacket(Connection* con) {
 	assert(con != NULL);
 	assert(con->protocolBase != NULL);
-	con->protocolBase->protocol_backend(*con);
+	if (con->protocolBase->protocol_backend(*con) == HANDLE_RETURN_FAILED_CLOSE_CONN) {
+		return -1;
+	}
+	return 0;
+}
+
+int ClientThread::send_data(Connection& conn, bool sendToClient) {
+
+	if (sendToClient) {
+		NetworkSocket* ns = conn.sock.curservs;
+		if (ns == NULL)
+			return 0;
+
+		if (ns->get_recvData().get_remailLength() > 0) {
+			this->write_data(conn, true);
+		}
+
+		if (ns->get_sendData().get_remailLength() > 0) {
+			this->write_data(conn, false);
+		}
+	} else {
+		NetworkSocket* ns = conn.sock.curclins;
+		if (ns == NULL)
+			return 0;
+
+		if (ns->get_recvData().get_remailLength() > 0) {
+			this->write_data(conn, false);
+		}
+
+		if (ns->get_sendData().get_remailLength() > 0) {
+			this->write_data(conn, true);
+		}
+	}
+
 	return 0;
 }
 

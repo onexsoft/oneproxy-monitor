@@ -53,17 +53,12 @@
 #include "record.h"
 #include "tool.h"
 
-typedef enum _prehandle_return_value_t{
-	PREHANDLE_FAILE, //与处理失败，这种情况下把客户端的数据直接转发给服务端，并且不进行统计处理
-	PREHANDLE_FORWARD_DIRECT, //预处理成功，但是也不进行统计处理，直接把客户端的数据转发给服务端，这种情况可能是当前包不完整，需要进行拼接;或者不是目标包
-	PREHANDLE_SUCCESS, //需要调用统计函数，针对包数据进行处理。
-}PreHandleRetValue;
-
 typedef enum _protocol_handle_return_value_t{
 	HANDLE_RETURN_ERROR, //表示当前函数处理出现错误,框架会直接把数据转发到服务端的。
 	HANDLE_RETURN_SUCCESS, //表示当前函数成功处理，框架会调用下一个注册函数处理剩下的数据
 	HANDLE_RETURN_SEND_DIRECT,//表示当前处理成功，但是框架不会处理剩下的数据，直接把接收到的数据直接转发到对端
 	HANDLE_RETURN_SEND_TO_CLIENT,//表示把前端缓存中的数据，直接转发给客户端。这种情况是针对在处理过程中修改了数据包，这个数据包是发送到前端的数据。目前保留
+	HANDLE_RETURN_FAILED_CLOSE_CONN,//表示当前的连接已经无法处理，需要把连接关闭掉
 } ProtocolHandleRetVal;
 
 declare_clsfunc_pointer(ProtocolHandleRetVal, ProtocolBase, BaseFunc, Connection&, StringBuf&)
@@ -76,11 +71,12 @@ class ProtocolBase {
 public:
 	ProtocolBase(){};
 	virtual ~ProtocolBase(){};
-	virtual void protocol_front(Connection& conn);
-	virtual void protocol_backend(Connection& conn);
+	virtual ProtocolHandleRetVal protocol_front(Connection& conn);
+	virtual ProtocolHandleRetVal protocol_backend(Connection& conn);
 	virtual bool is_currentDatabase(Connection& conn) = 0;
 	virtual int protocol_init(Connection& conn){return 0;}
 	virtual int protocol_getBackendConnect(Connection& conn);
+	int protocol_releaseBackendConnect(Connection& conn);
 
 	static void* createInstance();
 	virtual void destoryInstance() = 0;
@@ -109,8 +105,8 @@ protected:
 	virtual declare_protocol_handle_func(handle_defaultPacket)
 
 	//每次接收到数据包时，需要先调用此函数进行预处理。
-	virtual PreHandleRetValue prehandle_frontPacket(Connection& conn);
-	virtual PreHandleRetValue prehandle_backendPacket(Connection& conn);
+	virtual ProtocolHandleRetVal prehandle_frontPacket(Connection& conn);
+	virtual ProtocolHandleRetVal prehandle_backendPacket(Connection& conn);
 
 	//下面的两个函数是调用用户注册的处理函数前需要调用的，目的是让用户操作需要处理的数据，比如:sql server中需要跳过头部等。
 	virtual int protocol_initFrontStatPacket(Connection& conn);
@@ -158,6 +154,11 @@ protected:
 	virtual void stat_recvFinishedRow(Connection& conn, unsigned int rows = 0);
 	//sql语句执行错误，这个函数应该与stat_recvFinishedRow互斥
 	virtual void stat_executeErr(Connection& conn);
+
+	//检测socket是否active
+	static bool check_socketActive(NetworkSocket* ns) {return true;}
+	//把连接增加到pool中
+	virtual void add_socketToPool(NetworkSocket* ns);
 };
 
 #endif /* PROTOCOL_PROTOCOLBASE_H_ */

@@ -148,6 +148,10 @@ Config::Config()
 	add_oneproxyConfig("clientpassword", "0000", &Config::cvtString, &Config::set_clientPassword);
 	add_oneproxyConfig("passwordseparate", "true", &Config::cvtBool, &Config::set_passwordSeparate);
 	add_oneproxyConfig("readslave", "true", &Config::cvtBool, &Config::set_readSlave);
+	add_oneproxyConfig("useconnectionpool", "true", &Config::cvtBool, &Config::set_useConnectionPool);
+	add_oneproxyConfig("poolconncheckactivetime", "5", &Config::cvtInt, &Config::set_poolConnCheckActiveTime);
+	add_oneproxyConfig("poolconntimeoutreleasetime", "60", &Config::cvtInt, &Config::set_poolConnTimeoutReleaseTime);
+
 #undef add_oneproxyConfig
 
 #define add_dbConfig(db, key, defaultv, cvtf, setf) add_config(db, key, defaultv, (CVTFunc)cvtf, (SetFunc)setf)
@@ -252,6 +256,9 @@ void Config::print_config()
 	logs(Logger::INFO, "clientPassword: %s", this->m_clientPassword.c_str());
 	logs(Logger::INFO, "passwordseparate: %d", this->m_passwordSeparate);
 	logs(Logger::INFO, "readSlave: %d", this->m_readSlave);
+	logs(Logger::INFO, "useConnectionPool: %d", this->m_useConnectionPool);
+	logs(Logger::INFO, "poolConnCheckActiveTime: %d", this->m_poolConnCheckActiveTime);
+	logs(Logger::INFO, "poolConnTimeoutReleaseTime: %d", this->m_poolConnTimeoutReleaseTime);
 
 	std::vector<DataBase>::iterator it = dbVector.begin();
 	for (; it != dbVector.end(); ++it) {
@@ -328,11 +335,12 @@ int Config::handle_config()
 	}
 
 	//如果采用读写分离，则必须进行前后端密码分离
-	if (this->get_readSlave() && !this->get_passwordSeparate()) {
-		logs(Logger::ERR, "when read slave, the password separate must be true, error");
-		return -1;
+	if (this->get_passwordSeparate() == false) {
+		logs(Logger::WARNING, "Because of the password separate is false, "
+				"Forhibit use read slave and use connection pool");
+		this->set_readSlave(false);
+		this->set_useConnectionPool(false);
 	}
-
 	return 0;
 }
 
@@ -404,7 +412,8 @@ int Config::handle_args(int argc, char* argv[])
 		"--vip_address            the vip address\n"
 		"--threadnum              the number of worker threads\n"
 		"--passwordseparate       the client and middle software use different password(default: true)\n"
-		"--readSlave              when not in trans. read from slave database(default: true).\n"
+		"--readslave              when not in trans. read from slave database(default: true).\n"
+		"--useconnectionpool      when is true use connection pool, else not use connection pool(default: true)\n"
 		"Notice: If you need config database, you must use database_host, database_classname,\n"
 		"database_username, database_password at the same time.\n"
 		;
@@ -425,6 +434,7 @@ int Config::handle_args(int argc, char* argv[])
 			{"readsalve", required_argument, NULL, 'l'},
 			{"keepalive", no_argument, NULL, 'k'},
 			{"maxconnectnum", required_argument, NULL, 'm'},
+			{"useconnectionpool", required_argument, NULL, 'o'},
 			{"oneproxy_port", required_argument, NULL, 'p'},
 			{"httpserver_port", required_argument, NULL, 'P'},
 			{"quiet", no_argument, NULL, 'q'},
@@ -482,6 +492,13 @@ int Config::handle_args(int argc, char* argv[])
 				break;
 			case 'A':
 				config()->set_httpServerAddr(std::string(optarg));
+				break;
+			case 'o':
+				if (strncmp(optarg, "true", 4)) {
+					config()->set_useConnectionPool(true);
+				} else {
+					config()->set_useConnectionPool(false);
+				}
 				break;
 			case 'P':
 				config()->set_httpServerPort(atoi(optarg));
@@ -589,13 +606,13 @@ int Config::handle_args(int argc, char* argv[])
 		return -1;
 	}
 
-	config()->print_config();
-
 	//set logger level
 	logs_setLevel(config()->get_loggerLevel());
 	logs_setDumpData(config()->get_dumpData());
 	logs_setLogSql(config()->get_logSql());
 	logs_setLogFile(config()->get_logFilePath());
+
+	config()->print_config();
 
 	return 0;
 }

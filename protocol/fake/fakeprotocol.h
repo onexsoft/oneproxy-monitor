@@ -35,8 +35,8 @@ class FakeProtocol : public ProtocolBase {
 public:
 	FakeProtocol();
 	virtual ~FakeProtocol();
-	virtual void protocol_front(Connection& conn);
-	virtual void protocol_backend(Connection& conn);
+	virtual ProtocolHandleRetVal protocol_front(Connection& conn);
+	virtual ProtocolHandleRetVal protocol_backend(Connection& conn);
 	virtual bool is_currentDatabase(Connection& conn);
 	static void* createInstance();
 	virtual void destoryInstance();

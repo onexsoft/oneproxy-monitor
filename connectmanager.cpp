@@ -43,7 +43,8 @@ ConnectManager::ConnectManager(int threadNum):
 	runningTaskQueueMutexLock(std::string("connectManager_runningTaskQueue_lock"),  record()),
 	httpServer(config()->get_httpServerAddr(), config()->get_httpServerPort(), std::string("httpserver")),
 	vipThread(config()->get_vipIfName(), config()->get_vipAddress(), std::string("vipthread")),
-	oneproxyServer(this)
+	oneproxyServer(this),
+	assistThread(this)
 {
 	int i = 0;
 	this->stop = false;
@@ -237,12 +238,9 @@ void ConnectManager::start()
 		} else {
 			oneproxyServer.run_server(500);
 		}
-
-		if (cmpdata(u_uint64, (SystemApi::system_second() - record()->bakRecordStartTime), >=, record()->realRecordTime)) {
-			record()->bak_record();
-		}
 	}
 
+	assistThread.stop();
 	this->set_stop();
 }
 

@@ -38,18 +38,21 @@ FakeProtocol::~FakeProtocol() {
 	// TODO Auto-generated destructor stub
 }
 
-void FakeProtocol::protocol_front(Connection& conn)
+ProtocolHandleRetVal FakeProtocol::protocol_front(Connection& conn)
 {
-	return;
+	return HANDLE_RETURN_SUCCESS;
 }
 
-void FakeProtocol::protocol_backend(Connection& conn)
+ProtocolHandleRetVal FakeProtocol::protocol_backend(Connection& conn)
 {
-	return;
+	return HANDLE_RETURN_SUCCESS;
 }
 
 bool FakeProtocol::is_currentDatabase(Connection& conn)
 {
+	config()->set_useConnectionPool(false);
+	config()->set_passwordSeparate(false);
+	config()->set_readSlave(false);
 	return true;
 }
 

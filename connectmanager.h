@@ -37,6 +37,7 @@
 #include "mutexlock.h"
 #include "networksocket.h"
 #include "oneproxyserver.h"
+#include "assistthread.h"
 
 #include <map>
 #include <queue>
@@ -98,5 +99,6 @@ private:
 	Vip vipThread;
 
 	OneproxyServer oneproxyServer;
+	AssistThread assistThread;
 };
 #endif /* CONNECTMANAGER_H_ */

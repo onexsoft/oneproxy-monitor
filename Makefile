@@ -99,4 +99,3 @@ install:
 
 clean:
 	-@rm $(BUILD)/*.o $(TARGET)
-	-@rm $(BUILD)/$(BUILD_TEST_BIN)/*

@@ -27,44 +27,39 @@
 */
 
 #include "protocolbase.h"
+#include "connectionpool.h"
 
-void ProtocolBase::protocol_front(Connection& conn)
+ProtocolHandleRetVal ProtocolBase::protocol_front(Connection& conn)
 {
 	StringBuf& packet = conn.sock.get_clientSock()->get_recvData();
 	unsigned int oldOffset = packet.get_offset();
+	ProtocolHandleRetVal resultValue = HANDLE_RETURN_SUCCESS;
 
 	do {
 		//1. 统计前端接收到的数据长度
 		this->stat_readFrontData(conn);
 
 		//2. 预处理
-		PreHandleRetValue ret = this->prehandle_frontPacket(conn);
-		if (ret == PREHANDLE_FAILE || ret == PREHANDLE_FORWARD_DIRECT) {//直接转发此包
-			break;
-		} else if (ret != PREHANDLE_SUCCESS) {//
-			logs(Logger::ERR, "unkown return code(%d)", ret);
+		resultValue = this->prehandle_frontPacket(conn);
+		if (resultValue != HANDLE_RETURN_SUCCESS) {//可能出错或者需要直接转发
 			break;
 		}
 
 		//3.预处理成功，则继续处理此包，执行包头部的处理函数
 		if (this->protocol_initFrontStatPacket(conn)) {
 			logs(Logger::ERR, "handle front packet header error");
+			resultValue = HANDLE_RETURN_ERROR;
 			break;
 		}
 
 		//4. 调用注册函数进行处理
 		StringBuf& desPacket = *(conn.sock.get_clientSock()->get_bufPointer());
-		for(; desPacket.get_offset() < desPacket.length(); ) {//循环处理，直到所有的数据处理完毕
+		for(; desPacket.get_offset() < desPacket.length(); ) {	//循环处理，直到所有的数据处理完毕
 			int type = this->get_packetType(desPacket);
 			ProtocolBase::BaseHandleFuncMap::iterator it = this->frontHandleFunc.find(type);
 			lif(it != this->frontHandleFunc.end()) {
-				ProtocolHandleRetVal hret = (this->*it->second)(conn, desPacket);
-				if(hret == HANDLE_RETURN_ERROR) {//协议成没有找到对应的类型或者其他的情况
-					logs(Logger::INFO, "handle front packet error or need send direct, packet type is %d", (int)type);
-					break;
-				} else if (hret == HANDLE_RETURN_SEND_DIRECT) {
-					break;
-				} else if (hret == HANDLE_RETURN_SEND_TO_CLIENT) {
+				resultValue = (this->*it->second)(conn, desPacket);
+				if (resultValue == HANDLE_RETURN_SEND_TO_CLIENT) {
 					//1. 把despacket包中的数据复制到发送包中
 					StringBuf& sendPacket = conn.clins()->get_sendData();
 					sendPacket.append((void*)(desPacket.addr() + desPacket.get_offset()), desPacket.get_remailLength());
@@ -72,12 +67,14 @@ void ProtocolBase::protocol_front(Connection& conn)
 					//2. 把客户端接收包中的数据清理掉，防止发送到服务端
 					conn.clins()->get_recvData().clear();
 					break;
+				} else if (resultValue != HANDLE_RETURN_SUCCESS) {
+					break;
 				}
 			} else {
-				logs(Logger::ERR, "not find front handle function, packet type is %d, offset: %d",
+				logs(Logger::DEBUG, "not find front handle function, packet type is %d, offset: %d",
 						(int)type, desPacket.get_offset());
 				logs_buf_force("desPacket", desPacket.addr(), desPacket.length());
-				logs_buf_force("desPacketxxxx", (char*)(desPacket.addr() + desPacket.get_offset()),
+				logs_buf_force("desPacket+offset", (char*)(desPacket.addr() + desPacket.get_offset()),
 						desPacket.length() - desPacket.get_offset());
 				break;
 			}
@@ -89,31 +86,30 @@ void ProtocolBase::protocol_front(Connection& conn)
 
 	if (packet.length() > oldOffset)//when clear, the oldOffset maybe bigger than length.
 		packet.set_offset(oldOffset);
+
+	return resultValue;
 }
 
-void ProtocolBase::protocol_backend(Connection& conn)
+ProtocolHandleRetVal ProtocolBase::protocol_backend(Connection& conn)
 {
 	StringBuf& packet = conn.sock.get_curServSock()->get_recvData();
 	int oldOffset = packet.get_offset();
+	ProtocolHandleRetVal resultValue = HANDLE_RETURN_SUCCESS;
 
 	do {
 		//1. 累计后端得到的数据
 		this->stat_readBackendData(conn);
 
 		//2. 预处理
-		PreHandleRetValue ret = this->prehandle_backendPacket(conn);
-		if (ret == PREHANDLE_FAILE) {//直接转发此包
-			break;
-		} else if (ret == PREHANDLE_FORWARD_DIRECT){
-			break;
-		} else if (ret != PREHANDLE_SUCCESS) {//
-			logs(Logger::ERR, "unkown return code(%d)", ret);
+		resultValue = this->prehandle_backendPacket(conn);
+		if (resultValue != HANDLE_RETURN_SUCCESS) {//可能出现错误，或者需要直接转发
 			break;
 		}
 
 		//3.预处理成功，则继续处理此包，执行包头部的处理函数
 		if (this->protocol_initBackendStatPacket(conn)) {
 			logs(Logger::ERR, "handle front packet header error");
+			resultValue = HANDLE_RETURN_ERROR;
 			break;
 		}
 
@@ -123,16 +119,16 @@ void ProtocolBase::protocol_backend(Connection& conn)
 			int type = this->get_packetType(desPacket);
 			ProtocolBase::BaseHandleFuncMap::iterator it = this->backendHandleFunc.find(type);
 			lif(it != this->backendHandleFunc.end()) {
-				ProtocolHandleRetVal hret = (this->*it->second)(conn, desPacket);
-				if(hret == HANDLE_RETURN_ERROR) {
-					logs(Logger::INFO, "handle backend packet error or need send direct, packet type is %d", (int)type);
-					break;
-				} else if (hret == HANDLE_RETURN_SEND_DIRECT) {
+				resultValue = (this->*it->second)(conn, desPacket);
+				if (resultValue != HANDLE_RETURN_SUCCESS) {
 					break;
 				}
 			} else {
-//				logs(Logger::ERR, "not find backend packet handle function, packet type is %d", (int)type);
-//				logs_buf_force("desPacket", desPacket.addr(), desPacket.length());
+				logs(Logger::DEBUG, "not find backend packet handle function, packet type is %d", (int)type);
+				logs_buf_force("desPacket", desPacket.addr(), desPacket.length());
+				logs_buf_force("desPacket+offset", (char*)(desPacket.addr() + desPacket.get_offset()),
+										desPacket.length() - desPacket.get_offset());
+				resultValue = HANDLE_RETURN_ERROR;
 				break;
 			}
 		}
@@ -142,6 +138,8 @@ void ProtocolBase::protocol_backend(Connection& conn)
 	} while(0);
 
 	packet.set_offset(oldOffset);
+
+	return resultValue;
 }
 
 int ProtocolBase::protocol_getBackendConnect(Connection& conn)
@@ -151,6 +149,29 @@ int ProtocolBase::protocol_getBackendConnect(Connection& conn)
 
 	//2. create socket.
 	return this->protocol_createBackendConnect(conn);
+}
+
+int ProtocolBase::protocol_releaseBackendConnect(Connection& conn)
+{
+	if (config()->get_useConnectionPool()) {
+		if(conn.sock.masters != NULL && ConnectionPool::get_pool().set_backendConnect(conn.sock.masters)) {
+			delete conn.sock.masters;
+		}
+		if (conn.sock.slavers != NULL && ConnectionPool::get_pool().set_backendConnect(conn.sock.slavers)) {
+			delete conn.sock.slavers;
+		}
+	} else {
+		if (conn.sock.masters != NULL) {
+			delete conn.sock.masters;
+		}
+		if (conn.sock.slavers != NULL) {
+			delete conn.sock.slavers;
+		}
+	}
+
+	conn.sock.masters = NULL;
+	conn.sock.slavers = NULL;
+	return 0;
 }
 
 int ProtocolBase::protocol_chooseDatabase(Connection& conn)
@@ -180,20 +201,37 @@ int ProtocolBase::protocol_createBackendConnect(Connection& conn)
 	assert(conn.curdb() != NULL);
 	NetworkSocket* ns = NULL;
 	if (conn.servns() == NULL) {
-		ns = new NetworkSocket(conn.curdb()->get_addr(), conn.curdb()->get_port());
-		logs(Logger::DEBUG, "server address: %s, port: %d", ns->get_address().c_str(), ns->get_port());
-		conn.servns() = ns;
-		if (tcpClient.get_backendConnection(ns)
-				|| this->protocol_initBackendConnect(conn)) {
-			logs(Logger::ERR, "connection to backend error(address: %s, port:%d)",
-					ns->get_address().c_str(), ns->get_port());
-			return -1;
+
+		//1. 使用连接池
+		if (config()->get_useConnectionPool()) {
+			ns = ConnectionPool::get_pool().get_backendConnect(
+					conn.curdb()->get_addr(), conn.curdb()->get_port());
+			conn.servns() = ns;
 		}
+
+		//2.从后端创建连接
+		if (ns == NULL) {
+			ns = new NetworkSocket(conn.curdb()->get_addr(), conn.curdb()->get_port());
+			logs(Logger::DEBUG, "server address: %s, port: %d", ns->get_address().c_str(), ns->get_port());
+			conn.servns() = ns;
+			if (tcpClient.get_backendConnection(ns)
+					|| this->protocol_initBackendConnect(conn)) {
+				logs(Logger::ERR, "connection to backend error(address: %s, port:%d)",
+						ns->get_address().c_str(), ns->get_port());
+				return -1;
+			}
+
+			logs(Logger::DEBUG, "Create new socket(%d)", conn.sock.curservs->get_fd());
+			if (config()->get_useConnectionPool()) {
+				this->add_socketToPool(conn.servns());
+			}
+		}
+
 		if (conn.curdb() == conn.database.masterDataBase) {
-			logs(Logger::INFO, "current use master database");
+			logs(Logger::DEBUG, "current use master database");
 			conn.sock.masters = ns;
 		} else if (conn.curdb() == conn.database.slaveDataBase){
-			logs(Logger::INFO, "current use slave database");
+			logs(Logger::DEBUG, "current use slave database");
 			conn.sock.slavers = ns;
 		} else {
 			logs(Logger::ERR, "unkown database type, addr: %s, port: %d",
@@ -227,16 +265,16 @@ implement_protocol_handle_func(ProtocolBase, handle_defaultPacket)
 	return HANDLE_RETURN_SEND_DIRECT;//不进行后续处理，直接把数据转发到对端。
 }
 
-PreHandleRetValue ProtocolBase::prehandle_frontPacket(Connection& conn)
+ProtocolHandleRetVal ProtocolBase::prehandle_frontPacket(Connection& conn)
 {
 	//默认实现，直接执行后续操作
-	return PREHANDLE_SUCCESS;
+	return HANDLE_RETURN_SUCCESS;
 }
 
-PreHandleRetValue ProtocolBase::prehandle_backendPacket(Connection& conn)
+ProtocolHandleRetVal ProtocolBase::prehandle_backendPacket(Connection& conn)
 {
 	//默认实现，直接执行后续操作。
-	return PREHANDLE_SUCCESS;
+	return HANDLE_RETURN_SUCCESS;
 }
 
 int ProtocolBase::protocol_initFrontStatPacket(Connection& conn)
@@ -501,7 +539,7 @@ int ProtocolBase::stat_preparedSql(Connection& conn, unsigned int preparedHandle
 	//find sqlHashCode;
 	BackendHandle backendHandle;
 	uif (conn.handleManager().get_backendHandleBasePrepared(preparedHandle, backendHandle)) {
-		logs(Logger::ERR, "preparedHandle(%d) no sql", preparedHandle);
+		logs(Logger::ERR, "preparedHandle(%u) no sql", preparedHandle);
 		return -1;
 	}
 	conn.record.sqlInfo.sqlHashCode = backendHandle.hashCode;
@@ -549,3 +587,10 @@ void ProtocolBase::stat_executeErr(Connection& conn)
 	record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.queryFailNum++;
 	record()->clientQueryMap[conn.clins()->get_addressHashCode()].add_failSqlList(conn.record.sqlInfo.sqlHashCode);
 }
+
+void ProtocolBase::add_socketToPool(NetworkSocket* ns)
+{
+	ConnectionPool::get_pool().save_backendConnect(ns,
+			&NetworkSocket::destroy_networkSocket, &ProtocolBase::check_socketActive, true);
+}
+
