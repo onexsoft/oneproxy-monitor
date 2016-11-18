@@ -57,7 +57,7 @@ TcpServer::~TcpServer()
 int TcpServer::create_tcpServer() {
 	//1. create server socket;
 	if (this->create_servers() < 0) {
-		logs(Logger::FATAL, "create server error");
+		logs(Logger::ERR, "create server error");
 		return -1;
 	}
 
@@ -73,7 +73,8 @@ int TcpServer::create_tcpServer() {
 }
 
 void TcpServer::run_server(int timeout) {
-	this->ioEvent->run_loopWithTimeout(timeout);
+	if (this->ioEvent != NULL)
+		this->ioEvent->run_loopWithTimeout(timeout);
 }
 
 void TcpServer::set_tcpServer(std::string serverAddr, std::set<unsigned int>& portList)
@@ -81,6 +82,20 @@ void TcpServer::set_tcpServer(std::string serverAddr, std::set<unsigned int>& po
 	std::set<unsigned int>::iterator it = portList.begin();
 	for (; it != portList.end(); ++it) {
 		this->servSct.push_back(NetworkSocket(serverAddr, *it));
+	}
+}
+
+void TcpServer::stop_tcpServer()
+{
+	std::vector<NetworkSocket>::iterator  it = this->servSct.begin();
+	for (; it != this->servSct.end(); ++it) {
+		it->closeSocket(it->get_fd());
+	}
+	this->servSct.clear();
+	this->fdPortMap.clear();
+	if (this->ioEvent != NULL) {
+		this->ioEvent->destory_instance();
+		this->ioEvent = NULL;
 	}
 }
 
@@ -98,7 +113,7 @@ int TcpServer::create_servers()
 
 		//2. create listen socket
 		if (this->create_listenSocket(ns, (int)(ns.get_addr().sa.sa_family), &ns.get_addr().sa, sizeof(ns.get_addr().sa)) < 0) {
-			logs(Logger::ERR, "create listen socket error");
+			logs(Logger::ERR, "create listen socket error, port: %u", it->get_port());
 			return -1;
 		}
 	}
@@ -117,6 +132,11 @@ int TcpServer::create_listenSocket(NetworkSocket& ns, int af, const struct socka
 	if (af != AF_UNIX) {
 		if (ns.set_sockReUseAddr(sfd) < 0) {
 			logs(Logger::ERR, "set resueaddr error");
+			ns.closeSocket(sfd);
+			return -1;
+		}
+		if (ns.set_sockReUsePort(sfd) < 0) {
+			logs(Logger::ERR, "set socket reuseport error");
 			ns.closeSocket(sfd);
 			return -1;
 		}

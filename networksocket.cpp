@@ -136,9 +136,21 @@ int NetworkSocket::set_sockReUseAddr(unsigned int sfd)
 {
 	int val = 1;
 	if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, (const char*)&val, sizeof(val)) < 0) {
-		logs(Logger::ERR, "set sock(%d) resueaddr error, errmsg", sfd, strerror(errno));
+		logs(Logger::ERR, "set sock(%d) resueaddr error, errmsg:%s", sfd, SystemApi::system_strerror());
 		return -1;
 	}
+	return 0;
+}
+
+int NetworkSocket::set_sockReUsePort(unsigned int sfd)
+{
+#ifndef _WIN32
+	int val = 1;
+	if (setsockopt(sfd, SOL_SOCKET, SO_REUSEPORT, (const char*)&val, sizeof(val)) < 0) {
+		logs(Logger::ERR, "set sock(%d) resueport error, errmsg: %s", sfd, SystemApi::system_strerror());
+		return -1;
+	}
+#endif
 	return 0;
 }
 
@@ -172,7 +184,7 @@ int NetworkSocket::set_sockCommonOpt(unsigned int sfd, int is_unix)
 	/* turn on socket keepalive */
 	val = 1;
 	if(setsockopt(sfd, SOL_SOCKET, SO_KEEPALIVE, (char*)&val, sizeof(val)) < 0) {
-		logs(Logger::ERR, "set socket keepalive error(%s)", strerror(errno));
+		logs(Logger::ERR, "set socket keepalive error(%s)", SystemApi::system_strerror());
 		return -1;
 	}
 
@@ -181,7 +193,7 @@ int NetworkSocket::set_sockCommonOpt(unsigned int sfd, int is_unix)
 	if (cf_tcp_keepcnt > 0) {
 		val = cf_tcp_keepcnt;
 		if (setsockopt(sfd, IPPROTO_TCP, TCP_KEEPCNT, (char*)&val, sizeof(val)) < 0) {
-			logs(Logger::ERR, "set socket keepcnt error(%s)", strerror(errno));
+			logs(Logger::ERR, "set socket keepcnt error(%s)", SystemApi::system_strerror());
 			return -1;
 		}
 	}
@@ -190,7 +202,7 @@ int NetworkSocket::set_sockCommonOpt(unsigned int sfd, int is_unix)
 	if (cf_tcp_keepidle) {
 		val = cf_tcp_keepidle;
 		if (setsockopt(sfd, IPPROTO_TCP, TCP_KEEPIDLE, (char*)&val, sizeof(val)) < 0) {
-			logs(Logger::ERR, "set socket keepidle error(%s)", strerror(errno));
+			logs(Logger::ERR, "set socket keepidle error(%s)", SystemApi::system_strerror());
 			return -1;
 		}
 	}
@@ -198,7 +210,7 @@ int NetworkSocket::set_sockCommonOpt(unsigned int sfd, int is_unix)
 	if (cf_tcp_keepintvl) {
 		val = cf_tcp_keepintvl;
 		if(setsockopt(sfd, IPPROTO_TCP, TCP_KEEPINTVL, &val, sizeof(val)) < 0) {
-			logs(Logger::ERR, "set socket keepintvl error(%s)", strerror(errno));
+			logs(Logger::ERR, "set socket keepintvl error(%s)", SystemApi::system_strerror());
 			return -1;
 		}
 	}
@@ -207,7 +219,7 @@ int NetworkSocket::set_sockCommonOpt(unsigned int sfd, int is_unix)
 	if (cf_tcp_keepidle) {
 		val = cf_tcp_keepidle;
 		if(setsockopt(sfd, IPPROTO_TCP, TCP_KEEPALIVE, &val, sizeof(val)) < 0) {
-			logs(Logger::ERR, "set socket keepalive error(%s)", strerror(errno));
+			logs(Logger::ERR, "set socket keepalive error(%s)", SystemApi::system_strerror());
 			return -1;
 		}
 	}
@@ -218,13 +230,13 @@ int NetworkSocket::set_sockCommonOpt(unsigned int sfd, int is_unix)
 	if (cf_tcp_socket_buffer) {
 		val = cf_tcp_socket_buffer;
 		if(setsockopt(sfd, SOL_SOCKET, SO_SNDBUF, (char*)&val, sizeof(val)) < 0) {
-			logs(Logger::ERR, "set socket sndbuf error(%s)", strerror(errno));
+			logs(Logger::ERR, "set socket sndbuf error(%s)", SystemApi::system_strerror());
 			return -1;
 		}
 
 		val = cf_tcp_socket_buffer;
 		if(setsockopt(sfd, SOL_SOCKET, SO_RCVBUF, (char*)&val, sizeof(val)) < 0) {
-			logs(Logger::ERR, "set socket rcvbuf error(%s)", strerror(errno));
+			logs(Logger::ERR, "set socket rcvbuf error(%s)", SystemApi::system_strerror());
 			return -1;
 		}
 	}
@@ -234,7 +246,7 @@ int NetworkSocket::set_sockCommonOpt(unsigned int sfd, int is_unix)
 	 */
 	val = 1;
 	if(setsockopt(sfd, IPPROTO_TCP, TCP_NODELAY, (char*)&val, sizeof(val)) < 0) {
-		logs(Logger::ERR, "set socket nodelay error(%s)", strerror(errno));
+		logs(Logger::ERR, "set socket nodelay error(%s)", SystemApi::system_strerror());
 		return -1;
 	}
 	return 0;

@@ -33,21 +33,37 @@
 #include "keepalive.h"
 #include "connection.h"
 #include "connectmanager.h"
+#include "pidmanager.h"
 
 int main(int argc, char* argv[]) {
 	//1. 处理参数
-	config()->handle_args(argc, argv);
+	if (config()->handle_args(argc, argv)) {
+		logs(Logger::FATAL, "args error");
+		return -1;
+	}
+
+	//close old process.
+	if (config()->get_pidFilePath().size() > 0) {
+		if (PidManager::handle_reboot(config()->get_pidFilePath().c_str())) {
+			logs(Logger::FATAL, "reboot error");
+		}
+	}
+
+	if (config()->get_pidFilePath().size()) {
+		if(PidManager::save_pid(config()->get_pidFilePath().c_str())) {
+			logs(Logger::FATAL, "write pid error");
+		}
+	}
 
 	//2. 根据需要keepalive
 	if (config()->get_keepAlive()) {
 		KeepAlive keepAlive;
 		int child_exit_status = EXIT_SUCCESS;
-		int ret = keepAlive.keepalive(&child_exit_status, config()->get_pidFilePath().c_str());
-		if (ret == 0) {
-			//the agent stopped
-			return 0;
-		} else uif (ret < 0) {
-			return -1;
+		int ret = keepAlive.keepalive(&child_exit_status);
+		if (ret <= 0) {
+			if (config()->get_pidFilePath().size())
+				PidManager::unlink_pid(config()->get_pidFilePath().c_str());
+			return ret;
 		}
 		//else we are the child, go on
 	}
@@ -65,6 +81,10 @@ int main(int argc, char* argv[]) {
 	//5. 卸载网络环境
 	SystemApi::clear_networkEnv();
 
+	//6. unlink pid file
+	if (!config()->get_keepAlive() && config()->get_pidFilePath().size()) {
+		PidManager::unlink_pid(config()->get_pidFilePath().c_str());
+	}
 	logs(Logger::ERR, "success finished ...");
 
 	return 0;

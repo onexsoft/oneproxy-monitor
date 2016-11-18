@@ -51,7 +51,6 @@ Epoll::~Epoll()
 
 int Epoll::add_ioEvent(unsigned int fd, unsigned int event, Func func, void *args)
 {
-
 	logs(Logger::DEBUG, "fd: %d, event: %d", fd, event);
 #ifndef WIN32
 

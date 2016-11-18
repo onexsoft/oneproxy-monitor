@@ -48,7 +48,7 @@ public:
 	void run_server(int timeout);
 	IoEvent& get_ioEvent() {return *ioEvent;}
 	void set_tcpServer(std::string serverAddr, std::set<unsigned int>& portList);
-
+	void stop_tcpServer();//停止accept前端的连接，并且关闭ioevent.
 private:
 	int create_servers();
 	int create_listenSocket(NetworkSocket& ns, int af, const struct sockaddr *sa, int salen);

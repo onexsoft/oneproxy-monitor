@@ -103,9 +103,8 @@ MutexLock* ConnectManager::get_mutexLock()
 
 void ConnectManager::set_stop()
 {
-	logs(Logger::ERR, " start to finished .....");
+	assistThread.stop();
 	httpServer.stop();
-
 	ThreadMapType::iterator it = this->threadMap.begin();
 	for (; it != this->threadMap.end(); ++it) {
 		ClientThread * ct = (ClientThread*)it->second;
@@ -223,24 +222,44 @@ void ConnectManager::start()
 	oneproxyServer.set_tcpServer(config()->get_oneproxyAddr(), config()->get_oneproxyPortSet());
 	if (oneproxyServer.create_tcpServer()) {
 		logs(Logger::ERR, "create tcp server error");
+		this->set_stop();
 		return;
 	}
 
 	//信号处理函数
 	signal(SIGTERM, ConnectManager::handle_signal);
 	signal(SIGINT, ConnectManager::handle_signal);
+	signal(SIGUSR1, ConnectManager::handle_signal);
+	signal(SIGUSR2, ConnectManager::handle_signal);
 
 	logs(Logger::ERR, "start to connect  manager...");
-	while(false == ConnectManager::stop) {
+	while(!ConnectManager::stop || this->taskQueue.size()) {
+
+		//close accept@add by huih@20161116
+		//for have some connection in taskQueue, Need to wait handle them.
+		if (true == ConnectManager::stop && !oneproxyServer.get_stop()) {
+			oneproxyServer.set_stop();
+			oneproxyServer.stop_tcpServer();//close accept fd.
+		}
+
 		if (this->get_taskSize() > 0) {
 			this->alloc_task();
 			oneproxyServer.run_server(0);
 		} else {
-			oneproxyServer.run_server(500);
+			if (oneproxyServer.get_stop()) {
+				SystemApi::system_sleep(500);
+			} else {
+				oneproxyServer.run_server(500);
+			}
 		}
 	}
 
-	assistThread.stop();
+	//wait running conneciton finished.
+	while(this->get_runningTaskQueueSize()) {
+		SystemApi::system_sleep(500);
+	}
+
+
 	this->set_stop();
 }
 

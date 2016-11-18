@@ -39,6 +39,14 @@
 #include <pthread.h>
 #endif
 
+#ifdef WIN32
+typedef HANDLE MutexLockHandle;
+typedef HANDLE MutexCondHandle;
+#else
+typedef pthread_mutex_t MutexLockHandle;
+typedef pthread_cond_t MutexCondHandle;
+#endif
+
 class Record;
 class MutexLock{
 public:
@@ -57,13 +65,8 @@ public:
 
 	void set_record(Record *record);
 private:
-#ifdef WIN32
-	HANDLE mutex;
-	HANDLE mutexCond;
-#else
-	pthread_mutex_t mutex;
-	pthread_cond_t mutexCond;
-#endif
+	MutexLockHandle mutex;
+	MutexCondHandle mutexCond;
 	std::string mutexName;
 	Record *record;
 };

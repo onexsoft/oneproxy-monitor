@@ -153,7 +153,7 @@ int ProtocolBase::protocol_getBackendConnect(Connection& conn)
 
 int ProtocolBase::protocol_releaseBackendConnect(Connection& conn)
 {
-	if (config()->get_useConnectionPool()) {
+	if (conn.database.dataBaseGroup && conn.database.dataBaseGroup->get_useConnectionPool()) {
 		if(conn.sock.masters != NULL && ConnectionPool::get_pool().set_backendConnect(conn.sock.masters)) {
 			delete conn.sock.masters;
 		}
@@ -176,7 +176,7 @@ int ProtocolBase::protocol_releaseBackendConnect(Connection& conn)
 
 int ProtocolBase::protocol_chooseDatabase(Connection& conn)
 {
-	if (config()->get_readSlave()){
+	if (conn.database.dataBaseGroup && conn.database.dataBaseGroup->get_readSlave()){
 		if ((conn.record.type == SIMPLE_QUERY_SELECT_TYPE) && (conn.database.slaveDataBase != NULL)) {
 			conn.database.currentDataBase = conn.database.slaveDataBase;
 		} else {
@@ -203,7 +203,7 @@ int ProtocolBase::protocol_createBackendConnect(Connection& conn)
 	if (conn.servns() == NULL) {
 
 		//1. 使用连接池
-		if (config()->get_useConnectionPool()) {
+		if (conn.database.dataBaseGroup && conn.database.dataBaseGroup->get_useConnectionPool()) {
 			ns = ConnectionPool::get_pool().get_backendConnect(
 					conn.curdb()->get_addr(), conn.curdb()->get_port());
 			conn.servns() = ns;
@@ -222,7 +222,7 @@ int ProtocolBase::protocol_createBackendConnect(Connection& conn)
 			}
 
 			logs(Logger::DEBUG, "Create new socket(%d)", conn.sock.curservs->get_fd());
-			if (config()->get_useConnectionPool()) {
+			if (conn.database.dataBaseGroup && conn.database.dataBaseGroup->get_useConnectionPool()) {
 				this->add_socketToPool(conn.servns());
 			}
 		}

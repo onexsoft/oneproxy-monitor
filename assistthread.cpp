@@ -55,16 +55,14 @@ bool AssistThread::get_stop()
 thread_start_func(AssistThread::start)
 {
 	AssistThread* self = (AssistThread*)args;
-	if (config()->get_useConnectionPool()) {
-		ConnectionPool::get_pool().set_checkActive();
-		ConnectionPool::get_pool().set_idleTimeoutCheck(config()->get_poolConnCheckActiveTime());
-		ConnectionPool::get_pool().set_idleTimeoutRelease(config()->get_poolConnTimeoutReleaseTime());
-	}
+
+	ConnectionPool::get_pool().set_checkActive();
+	ConnectionPool::get_pool().set_idleTimeoutCheck(config()->get_poolConnCheckActiveTime());
+	ConnectionPool::get_pool().set_idleTimeoutRelease(config()->get_poolConnTimeoutReleaseTime());
+
 	while(false == self->get_stop()) {
 		//1. check the socket is active in pool
-		if(config()->get_useConnectionPool()) {
-			ConnectionPool::get_pool().check_connectActive();
-		}
+		ConnectionPool::get_pool().check_connectActive();
 
 		if (cmpdata(u_uint64, (SystemApi::system_second() - record()->bakRecordStartTime),
 				>=, record()->realRecordTime)) {

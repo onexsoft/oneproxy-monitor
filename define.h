@@ -74,4 +74,14 @@ const int cf_listen_backlog = 128;
 #define forrange(var, start, end) for(var = start; var < end; ++var)
 typedef void (*FreeFunc) (void*);
 
+#ifdef _WIN32
+#ifndef SIGUSR1
+#define SIGUSR1 10
+#endif
+#ifndef SIGUSR2
+#define SIGUSR2 12
+#endif
+#endif
+
+
 #endif /* DEFINE_H_ */

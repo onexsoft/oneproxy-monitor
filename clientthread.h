@@ -44,7 +44,9 @@ public:
 	~ClientThread();
 
 	void set_stop();
+	bool get_stop();
 	int add_task(NetworkSocket* ns);
+	unsigned int get_ConnectionNum();
 
 private:
 	void handle_readFrontData(unsigned int fd);
@@ -74,6 +76,7 @@ private:
 	ConnectManager *connManager;
 	ConnectionTypeMap connectTypeMap;
 	MutexLock clientLock;
+	bool stop;
 };
 
 #endif /* CLIENTTHREAD_H_ */

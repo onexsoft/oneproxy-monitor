@@ -98,6 +98,11 @@ public:
 		this->m_bufPointer = NULL;
 	}
 	~NetworkSocket() {
+		if (this->m_attachData.pointer != NULL && this->m_attachData.pointer_desFunc != NULL) {
+			(*this->m_attachData.pointer_desFunc)(this->m_attachData.pointer);
+			this->m_attachData.pointer = NULL;
+			this->m_attachData.pointer_desFunc = NULL;
+		}
 		if (m_fd) {
 			logs(Logger::DEBUG, "close fd(%d)", m_fd);
 			closeSocket(m_fd);
@@ -116,6 +121,7 @@ public:
 	int addr_assign(const sockaddr *addr);
 	int is_validAddress();
 	int set_sockReUseAddr(unsigned int sfd);
+	int set_sockReUsePort(unsigned int sfd);
 	int set_sockCommonOpt(unsigned int sfd, int is_unix);
 	int parse_address();
 

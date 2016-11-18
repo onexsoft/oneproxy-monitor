@@ -91,6 +91,7 @@ IMPLEMENT_CVTINT_FUNC(DataBase, cvtInt)
 
 IMPLEMENT_CVTSTRING_FUNC(DataBaseGroup, cvtString)
 IMPLEMENT_CVTINT_FUNC(DataBaseGroup, cvtInt)
+IMPLEMENT_CVTINT_FUNC(DataBaseGroup, cvtBool)
 
 int DataBaseGroup::set_dataBaseGroupVec(std::vector<DataBase>& dbVec,
 		const std::string dbGroupName,
@@ -146,12 +147,11 @@ Config::Config()
 	add_oneproxyConfig("threadnum", "0", &Config::cvtInt, &Config::set_threadNum);
 	add_oneproxyConfig("clientusername", "admin", &Config::cvtString, &Config::set_clientUserName);
 	add_oneproxyConfig("clientpassword", "0000", &Config::cvtString, &Config::set_clientPassword);
-	add_oneproxyConfig("passwordseparate", "true", &Config::cvtBool, &Config::set_passwordSeparate);
-	add_oneproxyConfig("readslave", "true", &Config::cvtBool, &Config::set_readSlave);
-	add_oneproxyConfig("useconnectionpool", "true", &Config::cvtBool, &Config::set_useConnectionPool);
+//	add_oneproxyConfig("passwordseparate", "true", &Config::cvtBool, &Config::set_passwordSeparate);
+//	add_oneproxyConfig("readslave", "true", &Config::cvtBool, &Config::set_readSlave);
+//	add_oneproxyConfig("useconnectionpool", "true", &Config::cvtBool, &Config::set_useConnectionPool);
 	add_oneproxyConfig("poolconncheckactivetime", "5", &Config::cvtInt, &Config::set_poolConnCheckActiveTime);
 	add_oneproxyConfig("poolconntimeoutreleasetime", "60", &Config::cvtInt, &Config::set_poolConnTimeoutReleaseTime);
-
 #undef add_oneproxyConfig
 
 #define add_dbConfig(db, key, defaultv, cvtf, setf) add_config(db, key, defaultv, (CVTFunc)cvtf, (SetFunc)setf)
@@ -172,6 +172,9 @@ Config::Config()
 	add_dbConfig(dbg, "dbslavegroup", "", &DataBase::cvtString, &DataBaseGroup::set_dbSlaveGroup);
 	add_dbConfig(dbg, "classname", "FakeProtocol", &DataBaseGroup::cvtString, &DataBaseGroup::set_className);
 	add_dbConfig(dbg, "frontport", "0", &DataBaseGroup::cvtInt, &DataBaseGroup::set_frontPort);
+	add_dbConfig(dbg, "passwordseparate", "true", &DataBaseGroup::cvtBool, &DataBaseGroup::set_passwordSeparate);
+	add_dbConfig(dbg, "readslave", "true", &DataBaseGroup::cvtBool, &DataBaseGroup::set_readSlave);
+	add_dbConfig(dbg, "useconnectionpool", "true", &DataBaseGroup::cvtBool, &DataBaseGroup::set_useConnectionPool);
 	this->dbGroupCfg.push_back(dbg);
 #undef add_dbConfig
 }
@@ -254,9 +257,6 @@ void Config::print_config()
 	logs(Logger::INFO, "threadNum: %d", this->m_threadNum);
 	logs(Logger::INFO, "clientUserName: %s", this->m_clientUserName.c_str());
 	logs(Logger::INFO, "clientPassword: %s", this->m_clientPassword.c_str());
-	logs(Logger::INFO, "passwordseparate: %d", this->m_passwordSeparate);
-	logs(Logger::INFO, "readSlave: %d", this->m_readSlave);
-	logs(Logger::INFO, "useConnectionPool: %d", this->m_useConnectionPool);
 	logs(Logger::INFO, "poolConnCheckActiveTime: %d", this->m_poolConnCheckActiveTime);
 	logs(Logger::INFO, "poolConnTimeoutReleaseTime: %d", this->m_poolConnTimeoutReleaseTime);
 
@@ -271,9 +271,11 @@ void Config::print_config()
 
 	std::vector<DataBaseGroup>::iterator itg = dbGroupVector.begin();
 	for (; itg != dbGroupVector.end(); ++itg) {
-		logs(Logger::INFO, "dbGroup: labelName: %s, className: %s, master: %s, slave: %s, frontPort: %d",
+		logs(Logger::INFO, "dbGroup: labelName: %s, className: %s, master: %s, slave: %s, "
+				"frontPort: %d, passwordSeparate: %d, readSlave: %d, useConnectionPool: %d",
 				itg->get_labelName().c_str(), itg->get_className().c_str(),
-				itg->get_dbMasterGroup().c_str(), itg->get_dbSlaveGroup().c_str(), itg->get_frontPort());
+				itg->get_dbMasterGroup().c_str(), itg->get_dbSlaveGroup().c_str(), itg->get_frontPort(),
+				itg->get_passwordSeparate(), itg->get_readSlave(), itg->get_useConnectionPool());
 	}
 }
 
@@ -334,12 +336,23 @@ int Config::handle_config()
 		return -1;
 	}
 
-	//如果采用读写分离，则必须进行前后端密码分离
-	if (this->get_passwordSeparate() == false) {
-		logs(Logger::WARNING, "Because of the password separate is false, "
-				"Forhibit use read slave and use connection pool");
-		this->set_readSlave(false);
-		this->set_useConnectionPool(false);
+	//forbit PGProtocol, FakeProtocol use passwordSeparate.
+	std::string pgp = std::string("PGProtocol");
+	std::string fp = std::string("FakeProtocol");
+	std::vector<DataBaseGroup>::iterator it = dbGroupVector.begin();
+	for(; it != dbGroupVector.end(); ++it) {
+		if (it->get_className().size() &&
+				(strncmp_s(it->get_className(), pgp) == 0 || strncmp_s(it->get_className(), fp) == 0)) {
+			it->set_passwordSeparate(false);
+			it->set_readSlave(false);
+			it->set_useConnectionPool(false);
+		}
+
+		//if passwordSeparate is false, forbit use readSlave and use connectionPool
+		if (!it->get_passwordSeparate()) {
+			it->set_readSlave(false);
+			it->set_useConnectionPool(false);
+		}
 	}
 	return 0;
 }
@@ -495,9 +508,9 @@ int Config::handle_args(int argc, char* argv[])
 				break;
 			case 'o':
 				if (strncmp(optarg, "true", 4)) {
-					config()->set_useConnectionPool(true);
+					dbg.set_useConnectionPool(true);
 				} else {
-					config()->set_useConnectionPool(false);
+					dbg.set_useConnectionPool(false);
 				}
 				break;
 			case 'P':
@@ -514,16 +527,16 @@ int Config::handle_args(int argc, char* argv[])
 				break;
 			case 'L':
 				if (strncmp(optarg, "true", 4)) {
-					config()->set_passwordSeparate(true);
+					dbg.set_passwordSeparate(true);
 				} else {
-					config()->set_passwordSeparate(false);
+					dbg.set_passwordSeparate(false);
 				}
 				break;
 			case 'l':
 				if (strncmp(optarg, "true", 4)){
-					config()->set_readSlave(true);
+					dbg.set_readSlave(true);
 				} else {
-					config()->set_readSlave(false);
+					dbg.set_readSlave(false);
 				}
 				break;
 			case 'm':

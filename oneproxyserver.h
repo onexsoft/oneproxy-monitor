@@ -60,6 +60,9 @@ public:
 	void set_stop() {
 		this->stop = true;
 	}
+	bool get_stop() {
+		return this->stop;
+	}
 
 	int start_server();
 	virtual void accept_clientRequest(NetworkSocket *clientSocket);

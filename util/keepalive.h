@@ -35,7 +35,7 @@ public:
 	virtual ~KeepAlive();
 
 
-	int keepalive(int *child_exit_status, const char *pid_file);
+	int keepalive(int *child_exit_status);
 
 	/**
 	 * @desc 信号处理函数
@@ -43,6 +43,8 @@ public:
 	 * @return 成功返回0， 否则返回-1.
 	 * **/
 	static void handle_signal(int sig);
+private:
+	static bool stop_keepAlive;
 };
 
 #endif /* UTIL_KEEPALIVE_H_ */

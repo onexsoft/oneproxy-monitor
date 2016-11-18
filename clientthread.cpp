@@ -57,6 +57,7 @@ ClientThread::ClientThread(ConnectManager* connManager, std::string threadName)
 	 clientLock(std::string("clientThread_lock"), NULL)
 {
 	this->connManager = connManager;
+	this->stop = false;
 	this->startThread(ClientThread::start, this);
 }
 
@@ -67,7 +68,12 @@ ClientThread::~ClientThread()
 
 void ClientThread::set_stop()
 {
-	this->ioEvent->stop_event();
+	this->stop = true;
+}
+
+bool ClientThread::get_stop()
+{
+	return this->stop;
 }
 
 int ClientThread::add_task(NetworkSocket* ns)
@@ -90,6 +96,11 @@ int ClientThread::add_task(NetworkSocket* ns)
 	//记录此线程开始处理任务
 	record()->record_threadStartHandingConn(this->get_threadId());
 	return 0;
+}
+
+unsigned int ClientThread::get_ConnectionNum()
+{
+	return this->connectTypeMap.size();
 }
 
 void ClientThread::handle_readFrontData(unsigned int fd)
@@ -248,13 +259,16 @@ int ClientThread::parse_frontDataPacket(Connection* con)
 			if(base != NULL && base->is_currentDatabase(*con)) {
 				logs(Logger::INFO,
 						"current database is: labelName %s, className %s, masterGroup: %s, "
-						"slaveGroup: %s, frontPort: %d", dbg->get_labelName().c_str(),
+						"slaveGroup: %s, frontPort: %d, passwordSeparate: %d, readSlave: %d, "
+						"useConnectionPool: %d", dbg->get_labelName().c_str(),
 						dbg->get_className().c_str(), dbg->get_dbMasterGroup().c_str(),
-						dbg->get_dbSlaveGroup().c_str(), dbg->get_frontPort());
+						dbg->get_dbSlaveGroup().c_str(), dbg->get_frontPort(),
+						dbg->get_passwordSeparate(), dbg->get_readSlave(), dbg->get_useConnectionPool());
+				con->database.dataBaseGroup = dbg;
 				uif(base->protocol_init(*con)) {//环境初始化失败
+					con->database.dataBaseGroup = NULL;
 					return -1;
 				}
-				con->database.dataBaseGroup = dbg;
 				con->protocolBase = base;
 
 				//先选择数据库，在进行解析数据包，防止解析失败的情况
@@ -266,7 +280,6 @@ int ClientThread::parse_frontDataPacket(Connection* con)
 					logs(Logger::DEBUG, "close the connection");
 					return -1;
 				}
-
 				return 0;
 			}
 		}
@@ -508,10 +521,10 @@ void ClientThread::rw_backendData(unsigned int fd, unsigned int events, void *ar
 
 thread_start_func(ClientThread::start)
 {
-	logs(Logger::INFO, "start client Thread");
 	ClientThread *ct = (ClientThread*)args;
 
-	ct->ioEvent->run_loop(500);//500ms
-
+	while(ct->get_stop() == false || ct->get_ConnectionNum()) {
+		ct->ioEvent->run_loopWithTimeout(500);//500 ms
+	}
 	return 0;
 }

@@ -67,7 +67,11 @@ void HttpServer::stop()
 thread_start_func(HttpServer::start)
 {
 	HttpServer *hs = (HttpServer*)args;
-	hs->create_tcpServer();
+	if (hs->create_tcpServer()) {
+		logs(Logger::ERR, "create tcp server error");
+		return 0;
+	}
+
 	while(hs->isStop == false){
 		hs->run_server(500);
 	}

@@ -50,9 +50,6 @@ ProtocolHandleRetVal FakeProtocol::protocol_backend(Connection& conn)
 
 bool FakeProtocol::is_currentDatabase(Connection& conn)
 {
-	config()->set_useConnectionPool(false);
-	config()->set_passwordSeparate(false);
-	config()->set_readSlave(false);
 	return true;
 }
 

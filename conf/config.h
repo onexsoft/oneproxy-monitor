@@ -105,14 +105,21 @@ class DataBaseGroup: public ConfigBase {
 	declare_class_member(std::string, dbSlaveGroup)
 	declare_class_member(std::string, className)
 	declare_class_member(unsigned int, frontPort)
+	declare_class_member(bool, passwordSeparate)
+	declare_class_member(bool, readSlave)
+	declare_class_member(bool, useConnectionPool)
 	declare_class_member_co(std::vector<DataBase*>, dbMasterGroupVec)
 	declare_class_member_co(std::vector<DataBase*>, dbSlaveGroupVec)
 
 	declare_cvt_func(cvtString)
 	declare_cvt_func(cvtInt)
+	declare_cvt_func(cvtBool)
 public:
 	DataBaseGroup() {
 		this->m_frontPort = 0;
+		this->m_passwordSeparate = true;
+		this->m_readSlave = true;
+		this->m_useConnectionPool = true;
 	}
 
 	DataBaseGroup(std::string labelName, std::string dbMasterGroup,
@@ -121,7 +128,10 @@ public:
 			m_dbMasterGroup(dbMasterGroup),
 			m_dbSlaveGroup(dbSlaveGroup),
 			m_className(className),
-			m_frontPort(frontPort){
+			m_frontPort(frontPort) {
+		this->m_passwordSeparate = true;
+		this->m_readSlave = true;
+		this->m_useConnectionPool = true;
 	}
 
 	bool is_valid() {
@@ -159,9 +169,9 @@ class Config: public ConfigBase{
 	declare_class_member(int, threadNum)
 	declare_class_member(std::string, clientUserName)
 	declare_class_member(std::string, clientPassword)
-	declare_class_member(bool, passwordSeparate)
-	declare_class_member(bool, readSlave)
-	declare_class_member(bool, useConnectionPool)
+//	declare_class_member(bool, passwordSeparate)
+//	declare_class_member(bool, readSlave)
+//	declare_class_member(bool, useConnectionPool)
 	declare_class_member(int, poolConnCheckActiveTime)
 	declare_class_member(int, poolConnTimeoutReleaseTime)
 	declare_cvt_func(cvtString)

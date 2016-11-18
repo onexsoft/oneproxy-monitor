@@ -43,6 +43,7 @@
 #include <errno.h>
 #endif
 
+bool KeepAlive::stop_keepAlive = false;
 KeepAlive::KeepAlive() {
 	// TODO Auto-generated constructor stub
 
@@ -53,20 +54,20 @@ KeepAlive::~KeepAlive() {
 }
 
 //return 1: represent in child, -1: error, 0: exit normal.
-int KeepAlive::keepalive(int *child_exit_status, const char *pid_file) {
-
+int KeepAlive::keepalive(int *child_exit_status)
+{
 #ifndef _WIN32
 	int nprocs = 0;
 	pid_t child_pid = -1;
 
-	for (;;) {
+	while(KeepAlive::stop_keepAlive == false) {
 		/* try to start the children */
 		while (nprocs < 1) {
 			pid_t pid = fork();
 
 			if (pid == 0) {
 				/* child */
-				logs(Logger::INFO, "we are the child: %d", getpid());
+				logs(Logger::DEBUG, "we are the child: %d", getpid());
 				return 1;
 			} else if (pid < 0) {
 				/* fork() failed */
@@ -74,7 +75,7 @@ int KeepAlive::keepalive(int *child_exit_status, const char *pid_file) {
 				return -1;
 			} else {
 				/* we are the angel, let's see what the child did */
-				logs(Logger::INFO, "[angel] we try to keep PID=%d alive", pid);
+				logs(Logger::DEBUG, "[angel] we try to keep PID=%d alive", pid);
 
 				/* forward a few signals that are sent to us to the child instead */
 				signal(SIGINT, KeepAlive::handle_signal);
@@ -93,23 +94,22 @@ int KeepAlive::keepalive(int *child_exit_status, const char *pid_file) {
 			int exit_status;
 			pid_t exit_pid;
 
-			logs(Logger::INFO, "waiting for %d", child_pid);
+			logs(Logger::DEBUG, "waiting for %d", child_pid);
 			memset(&tRusage, 0, sizeof(tRusage)); /* make sure everything is zero'ed out */
 			exit_pid = waitpid(child_pid, &exit_status, 0);
 
-			logs(Logger::INFO, "%d returned: %d", child_pid, exit_pid);
+			logs(Logger::DEBUG, "%d returned: %d", child_pid, exit_pid);
 
-			if (exit_pid == child_pid) {
-				/* delete pid file */
-				if (pid_file) {
-					unlink(pid_file);
-				}
-
+			if (exit_pid == child_pid) {//child process, exited.
 				/* our child returned, let's see how it went */
-				if (WIFEXITED(exit_status)) {
-					if (child_exit_status) *child_exit_status = WEXITSTATUS(exit_status);
+				if (WIFEXITED(exit_status)) {//child process is normal exit? if normal exit, return value != 0
+
+					//get child process exit value.
+					if (child_exit_status)
+						*child_exit_status = WEXITSTATUS(exit_status);
+
 					if (*child_exit_status != 2 && *child_exit_status != 3) {
-						logs(Logger::ERR, "[angel] PID=%d exited normally with exit-code = %d (it used %ld kBytes max)",
+						logs(Logger::DEBUG, "[angel] PID=%d exited normally with exit-code = %d (it used %ld kBytes max)",
 								child_pid, WEXITSTATUS(exit_status), tRusage.ru_maxrss / 1024);
 
 						if (*child_exit_status != 4)
@@ -130,9 +130,9 @@ int KeepAlive::keepalive(int *child_exit_status, const char *pid_file) {
 					else
 					{
 						if (*child_exit_status == 2)
-							logs(Logger::INFO, "[angel] PID=%d died on yy_fatal_error ... waiting 2sec before restart", child_pid);
+							logs(Logger::DEBUG, "[angel] PID=%d died on yy_fatal_error ... waiting 2sec before restart", child_pid);
 						else if (*child_exit_status == 3)
-							logs(Logger::INFO, "%s: [angel] PID=%d reboot on admin remand ... waiting 2sec before restart", child_pid);
+							logs(Logger::DEBUG, "%s: [angel] PID=%d reboot on admin remand ... waiting 2sec before restart", child_pid);
 
 						signal(SIGINT, SIG_DFL);
 						signal(SIGTERM, SIG_DFL);
@@ -150,7 +150,7 @@ int KeepAlive::keepalive(int *child_exit_status, const char *pid_file) {
 					 *
 					 * log it and restart */
 
-					logs(Logger::INFO, "[angel] PID=%d died on signal=%d (it used %ld kBytes max) ... waiting 3min before restart",
+					logs(Logger::DEBUG, "[angel] PID=%d died on signal=%d (it used %ld kBytes max) ... waiting 3min before restart",
 							child_pid, WTERMSIG(exit_status), tRusage.ru_maxrss / 1024);
 
 					/**
@@ -168,7 +168,7 @@ int KeepAlive::keepalive(int *child_exit_status, const char *pid_file) {
 					child_pid = -1;
 				} else if (WIFSTOPPED(exit_status)) {
 				} else {
-					logs(Logger::INFO, "not reach...");
+					logs(Logger::DEBUG, "not reach...");
 				}
 			} else if (-1 == exit_pid) {
 				/* EINTR is ok, all others bad */
@@ -186,11 +186,16 @@ int KeepAlive::keepalive(int *child_exit_status, const char *pid_file) {
 
 void KeepAlive::handle_signal(int sig)
 {
-	logs(Logger::ERR, "handle signal");
+	logs(Logger::DEBUG, "handle signal sig: %d", sig);
 #ifdef _WIN32
+	return;
 #else
-	signal(sig, SIG_IGN); /* we don't want to create a loop here */
-
-	kill(0, sig);
+	signal(sig, SIG_IGN);//忽略
+	if (sig == SIGUSR1) {
+		kill(0, SIGINT);//发送信号停止子进程
+		KeepAlive::stop_keepAlive = true;
+	} else {
+		kill(0, sig);
+	}
 #endif
 }
