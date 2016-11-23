@@ -61,7 +61,10 @@ thread_start_func(AssistThread::start)
 	ConnectionPool::get_pool().set_idleTimeoutRelease(config()->get_poolConnTimeoutReleaseTime());
 
 	while(false == self->get_stop()) {
-		//1. check the socket is active in pool
+		//update global time
+		config()->set_globalSecondTime(SystemApi::system_millisecond());
+
+		//check the socket is active in pool
 		ConnectionPool::get_pool().check_connectActive();
 
 		if (cmpdata(u_uint64, (SystemApi::system_second() - record()->bakRecordStartTime),

@@ -147,11 +147,9 @@ Config::Config()
 	add_oneproxyConfig("threadnum", "0", &Config::cvtInt, &Config::set_threadNum);
 	add_oneproxyConfig("clientusername", "admin", &Config::cvtString, &Config::set_clientUserName);
 	add_oneproxyConfig("clientpassword", "0000", &Config::cvtString, &Config::set_clientPassword);
-//	add_oneproxyConfig("passwordseparate", "true", &Config::cvtBool, &Config::set_passwordSeparate);
-//	add_oneproxyConfig("readslave", "true", &Config::cvtBool, &Config::set_readSlave);
-//	add_oneproxyConfig("useconnectionpool", "true", &Config::cvtBool, &Config::set_useConnectionPool);
 	add_oneproxyConfig("poolconncheckactivetime", "5", &Config::cvtInt, &Config::set_poolConnCheckActiveTime);
 	add_oneproxyConfig("poolconntimeoutreleasetime", "60", &Config::cvtInt, &Config::set_poolConnTimeoutReleaseTime);
+	add_oneproxyConfig("connecttimeout", "86400", &Config::cvtInt, &Config::set_connectTimeOut);//one day,unit: second.
 #undef add_oneproxyConfig
 
 #define add_dbConfig(db, key, defaultv, cvtf, setf) add_config(db, key, defaultv, (CVTFunc)cvtf, (SetFunc)setf)
@@ -177,6 +175,9 @@ Config::Config()
 	add_dbConfig(dbg, "useconnectionpool", "true", &DataBaseGroup::cvtBool, &DataBaseGroup::set_useConnectionPool);
 	this->dbGroupCfg.push_back(dbg);
 #undef add_dbConfig
+
+	//init global time
+	this->m_globalSecondTime = SystemApi::system_millisecond()/1000;
 }
 
 void Config::add_config(std::vector<ConfigKeyValue>& db, std::string key, std::string dvalue, CVTFunc cf, SetFunc sf)

@@ -112,6 +112,7 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 		logs(Logger::ERR, "fd(%d) do not in connectionTypeMap error", fd);
 		return;
 	}
+	con->activeTime = config()->get_globalSecondTime();
 
 	//2.read data from front socket
 	NetworkSocket *cns = con->clins();
@@ -320,6 +321,7 @@ void ClientThread::handle_readBackendData(unsigned int fd)
 		logs(Logger::INFO, "no fd(%d) in connectTypeMap", fd);
 		return;
 	}
+	con->activeTime = config()->get_globalSecondTime();
 
 	//2. read data from backend
 	NetworkSocket *sns = con->sock.get_curServSock();
@@ -480,6 +482,22 @@ void ClientThread::remove_connectFdRelation(unsigned int fd)
 	this->clientLock.unlock();
 }
 
+void ClientThread::check_connectionTimeout() {
+	this->clientLock.lock();
+	ConnectionTypeMap::iterator it = this->connectTypeMap.begin();
+	for (; it != this->connectTypeMap.end(); ++it) {
+		if ((config()->get_globalSecondTime() - it->second->activeTime)
+				> (u_uint64)(config()->get_connectTimeOut())) {//one day
+			logs(Logger::WARNING, "front fd(%d) time out, close by oneproxy.",
+					it->second->sock.curclins->get_fd());
+			this->clientLock.unlock();
+			this->finished_connection(it->second);
+			return;//one time, close one connection.
+		}
+	}
+	this->clientLock.unlock();
+}
+
 void ClientThread::rw_frontData(unsigned int fd, unsigned int events, void* args)
 {
 	ClientThread* ct = (ClientThread*)args;
@@ -522,9 +540,16 @@ void ClientThread::rw_backendData(unsigned int fd, unsigned int events, void *ar
 thread_start_func(ClientThread::start)
 {
 	ClientThread *ct = (ClientThread*)args;
-
+	unsigned int cntTime = 10;//5 second, check connection one times.
 	while(ct->get_stop() == false || ct->get_ConnectionNum()) {
 		ct->ioEvent->run_loopWithTimeout(500);//500 ms
+
+		if (cntTime > 0) {
+			cntTime = cntTime - 1;
+		} else {
+			cntTime = 10;
+			ct->check_connectionTimeout();
+		}
 	}
 	return 0;
 }

@@ -171,11 +171,13 @@ typedef struct _connection_t {
 	ConnDB database;
 	DoingRecord record;
 	u_uint64 createConnTime;//millsecond
+	u_uint64 activeTime; //when receive data, update the time. unit:second.
 	AutoPointer pointer;
 	SessionData sessData;
 	_connection_t() {
 		this->protocolBase = NULL;
 		this->createConnTime = 0;
+		this->activeTime = config()->get_globalSecondTime();//use global time, decrease call system api
 	}
 #define clins() sock.curclins
 #define servns() sock.curservs

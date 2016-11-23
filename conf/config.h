@@ -171,6 +171,11 @@ class Config: public ConfigBase{
 	declare_class_member(std::string, clientPassword)
 	declare_class_member(int, poolConnCheckActiveTime)
 	declare_class_member(int, poolConnTimeoutReleaseTime)
+	declare_class_member(int, connectTimeOut)//when connect timeout, oneproxy will close it.
+
+	//global time, one second update once, don't set value by user.
+	declare_class_member(u_uint64, globalSecondTime);
+
 	declare_cvt_func(cvtString)
 	declare_cvt_func(cvtInt)
 	declare_cvt_func(cvtLogger)

@@ -47,6 +47,8 @@ public:
 	bool get_stop();
 	int add_task(NetworkSocket* ns);
 	unsigned int get_ConnectionNum();
+	//check connection is timeout or not
+	void check_connectionTimeout();
 
 private:
 	void handle_readFrontData(unsigned int fd);
