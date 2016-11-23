@@ -122,14 +122,19 @@ void findSqlKeyWord(std::string src, std::string dst)
 
 void TestTool::test_findSqlKeyWord()
 {
-	findSqlKeyWord("BEGIN TRANS;select * from bigtable", "BeGin");
-	findSqlKeyWord("BEGINTRANS;select * from bigtable", "BeGin");
-	findSqlKeyWord("BEGIN", "BeGin");
-	findSqlKeyWord("begin", "BeGin");
-	findSqlKeyWord("begin;", "BeGin");
-	findSqlKeyWord("select * from bigtable;begin;", "BeGin");
-	findSqlKeyWord("select * from bigtable;begin;select * from bigtable;", "BeGin");
-	findSqlKeyWord("select * from bigtable;\'begin\';select * from bigtable;", "BeGin");
-	findSqlKeyWord("select * from bigtable;\'begin     dsfsadfsa  \';select * from bigtable;", "BeGin");
+//	findSqlKeyWord("BEGIN TRANS;select * from bigtable", "BeGin");
+//	findSqlKeyWord("BEGINTRANS;select * from bigtable", "BeGin");
+//	findSqlKeyWord("BEGIN", "BeGin");
+//	findSqlKeyWord("begin", "BeGin");
+//	findSqlKeyWord("begin;", "BeGin");
+//	findSqlKeyWord("select * from bigtable;begin;", "BeGin");
+//	findSqlKeyWord("select * from bigtable;begin;select * from bigtable;", "BeGin");
+//	findSqlKeyWord("select * from bigtable;\'begin\';select * from bigtable;", "BeGin");
+//	findSqlKeyWord("select * from bigtable;\'begin     dsfsadfsa  \';select * from bigtable;", "BeGin");
+
+	std::string src = "DECLARE @edition sysname SET @edition = cast(SERVERPROPERTY(N ?) as sysname) SELECT CAST(serverproperty(N ?) AS sysname) AS [ Server_Name ] , ? + quotename(CAST(serverproperty(N ?) AS sysname) , ?) + ? AS [ Server_Urn ] , CAST(case when @edition = N ? then ? else ? end AS int) AS [ Server_ServerType ] ,(@@microsoftversion / ? x1000000) & ? xff AS [ VersionMajor ] ,(@@microsoftversion / ? x10000) & ? xff AS [ VersionMinor ] , @@microsoftversion & ? xffff AS [ BuildNumber ] , CAST(SERVERPROPERTY(?) AS bit) AS [ IsSingleUser ] , CAST(SERVERPROPERTY(N ?) AS sysname) AS [ Edition ] , CAST(SERVERPROPERTY(?) AS int) AS [ EngineEdition ] ORDER BY [ Server_Name ] ASC";
+	std::string dst = "commit";
+	findSqlKeyWord(src, dst);
+
 }
 

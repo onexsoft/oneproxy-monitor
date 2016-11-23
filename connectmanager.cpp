@@ -33,19 +33,24 @@
 #include "logger.h"
 #include "clientthread.h"
 #include "connectmanager.h"
+#include "pidmanager.h"
 
 #include <signal.h>
 #include <unistd.h>
 
 bool ConnectManager::stop = false;
+OneproxyServer ConnectManager::oneproxyServer;
+
 ConnectManager::ConnectManager(int threadNum):
 	mutexLock(std::string("connectManager_taskQueue_lock"), record()),
 	runningTaskQueueMutexLock(std::string("connectManager_runningTaskQueue_lock"),  record()),
 	httpServer(config()->get_httpServerAddr(), config()->get_httpServerPort(), std::string("httpserver")),
 	vipThread(config()->get_vipIfName(), config()->get_vipAddress(), std::string("vipthread")),
-	oneproxyServer(this),
 	assistThread(this)
 {
+
+	ConnectManager::oneproxyServer.set_connectManager(this);
+
 	int i = 0;
 	this->stop = false;
 	this->threadNum = threadNum;
@@ -111,7 +116,7 @@ void ConnectManager::set_stop()
 		ct->set_stop();
 	}
 
-	oneproxyServer.set_stop();
+	ConnectManager::oneproxyServer.set_stop();
 }
 
 NetworkSocket* ConnectManager::find_runningTask(u_uint64 threadId, int fd)
@@ -219,8 +224,8 @@ unsigned int ConnectManager::get_runningTaskQueueSize()
 void ConnectManager::start()
 {
 	SystemApi::system_setThreadName("mainThread");
-	oneproxyServer.set_tcpServer(config()->get_oneproxyAddr(), config()->get_oneproxyPortSet());
-	if (oneproxyServer.create_tcpServer()) {
+	ConnectManager::oneproxyServer.set_tcpServer(config()->get_oneproxyAddr(), config()->get_oneproxyPortSet());
+	if (ConnectManager::oneproxyServer.create_tcpServer()) {
 		logs(Logger::ERR, "create tcp server error");
 		this->set_stop();
 		return;
@@ -232,24 +237,31 @@ void ConnectManager::start()
 	signal(SIGUSR1, ConnectManager::handle_signal);
 	signal(SIGUSR2, ConnectManager::handle_signal);
 
+	//close old process.
+	if (config()->get_pidFilePath().size() > 0) {
+		if (PidManager::handle_reboot(config()->get_pidFilePath().c_str())) {
+			logs(Logger::ERR, "reboot error");
+			return;
+		}
+	}
+
+	if (config()->get_pidFilePath().size()) {
+		if(PidManager::save_pid(config()->get_pidFilePath().c_str())) {
+			logs(Logger::ERR, "write pid error");
+			return;
+		}
+	}
+
 	logs(Logger::ERR, "start to connect  manager...");
 	while(!ConnectManager::stop || this->taskQueue.size()) {
-
-		//close accept@add by huih@20161116
-		//for have some connection in taskQueue, Need to wait handle them.
-		if (true == ConnectManager::stop && !oneproxyServer.get_stop()) {
-			oneproxyServer.set_stop();
-			oneproxyServer.stop_tcpServer();//close accept fd.
-		}
-
 		if (this->get_taskSize() > 0) {
 			this->alloc_task();
-			oneproxyServer.run_server(0);
+			ConnectManager::oneproxyServer.run_server(0);
 		} else {
-			if (oneproxyServer.get_stop()) {
+			if (ConnectManager::oneproxyServer.get_stop()) {
 				SystemApi::system_sleep(500);
 			} else {
-				oneproxyServer.run_server(500);
+				ConnectManager::oneproxyServer.run_server(500);
 			}
 		}
 	}
@@ -259,12 +271,17 @@ void ConnectManager::start()
 		SystemApi::system_sleep(500);
 	}
 
-
 	this->set_stop();
+
+	//6. unlink pid file
+	if (config()->get_pidFilePath().size()) {
+		PidManager::unlink_pid(config()->get_pidFilePath().c_str());
+	}
 }
 
 void ConnectManager::handle_signal(int sig)
 {
+	ConnectManager::oneproxyServer.stop_tcpServer();
 	ConnectManager::stop = true;
 	return ;
 }

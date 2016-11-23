@@ -49,7 +49,8 @@ ProtocolPacket::~ProtocolPacket() {
 int ProtocolPacket::get_dataByLen(StringBuf& stringBuf, u_uint8* buf, unsigned int len)
 {
 	uif (stringBuf.length() - stringBuf.get_offset() < len) {
-		logs(Logger::ERR, "stringbuf length(%d) - offset(%d) < len(%d)", stringBuf.length(), stringBuf.get_offset(), len);
+		logs(Logger::ERR, "stringbuf length(%d) - offset(%d) < len(0x%02x)",
+				stringBuf.length(), stringBuf.get_offset(), len);
 		return -1;
 	}
 
@@ -669,6 +670,25 @@ int ProtocolPacket::set_wstringUnicode2BLen(StringBuf& stringBuf, const std::wst
 
 	//1. write length
 	quick_set_integer_LT(16, stringBuf, length, "set length error");
+
+	//2. write data
+	stringBuf.append((void*)(tbuf.addr() + tbuf.get_offset()), tbuf.get_remailLength());
+
+	return 0;
+}
+
+int ProtocolPacket::set_wstringUnicode1BLen(StringBuf& stringBuf, const std::wstring& desStr)
+{
+	int length = desStr.length();
+
+	StringBuf tbuf;
+	uif(Tool::wstring2byte(desStr, tbuf)) {
+		logs(Logger::ERR, "string2unicode error");
+		return -1;
+	}
+
+	//1. write length
+	quick_set_integer_LT(8, stringBuf, length, "set length error");
 
 	//2. write data
 	stringBuf.append((void*)(tbuf.addr() + tbuf.get_offset()), tbuf.get_remailLength());

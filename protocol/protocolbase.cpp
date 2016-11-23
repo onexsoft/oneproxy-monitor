@@ -124,10 +124,11 @@ ProtocolHandleRetVal ProtocolBase::protocol_backend(Connection& conn)
 					break;
 				}
 			} else {
-				logs(Logger::DEBUG, "not find backend packet handle function, packet type is %d", (int)type);
-				logs_buf_force("desPacket", desPacket.addr(), desPacket.length());
-				logs_buf_force("desPacket+offset", (char*)(desPacket.addr() + desPacket.get_offset()),
-										desPacket.length() - desPacket.get_offset());
+				logs(Logger::DEBUG, "not find backend packet handle function, packet type is %d, offset: %d",
+						(int)type, desPacket.get_offset());
+//				logs_buf_force("desPacket", desPacket.addr(), desPacket.length());
+//				logs_buf_force("desPacket+offset", (char*)(desPacket.addr() + desPacket.get_offset()),
+//										desPacket.length() - desPacket.get_offset());
 				resultValue = HANDLE_RETURN_ERROR;
 				break;
 			}

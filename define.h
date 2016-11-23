@@ -38,8 +38,8 @@ const int cf_listen_backlog = 128;
 
 #define u_uint64 unsigned long long
 #define u_uint8 unsigned char
-#define u_uint16 short int
-#define u_uint32 int
+#define u_uint16 unsigned short int
+#define u_uint32 unsigned int
 
 #define oneproxy_version() "v1.0.0"
 

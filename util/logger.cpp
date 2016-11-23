@@ -127,13 +127,13 @@ void Logger::output(const char* hint, const char* fmt, va_list args) {
 #if 1
 	snprintf(result, 2048, "[%s][%ld]%s\n", this->current_timeStr().c_str(), (unsigned long int)(tid), buf);
 #else
-	snprintf(result, 2048, "[%ld]%s\n", (unsigned long int)(tid), buf);
+	snprintf(result, 2048, "%s\n", buf);
 #endif
 	} else {
 #if 1
 	snprintf(result, 2048, "[%s][%s][%ld]%s\n", this->current_timeStr().c_str(), hint, (unsigned long int)(tid), buf);
 #else
-	snprintf(result, 2048, "[%s][%ld]%s\n", hint, (unsigned long int)(tid), buf);
+	snprintf(result, 2048, "[%s]%s\n", hint, buf);
 #endif
 	}
 

@@ -181,6 +181,14 @@
 	}\
 }while(0)
 
+#define quick_set_wstringUnicode1BLen(dataBuf, str, errorMsg) do{\
+	uif(ProtocolPacket::set_wstringUnicode1BLen(dataBuf, str)) {\
+		logs(Logger::ERR, "%s", errorMsg); \
+		return -1;\
+	}\
+}while(0)
+
+
 class ProtocolPacket {
 public:
 	ProtocolPacket();
@@ -238,11 +246,10 @@ public:
 	static int set_integerData32_LT(StringBuf& stringBuf, u_uint64 value);
 	static int set_integerData64_LT(StringBuf& stringBuf, u_uint64 value);
 
-//	static int set_byteVarChar(StringBuf& stringBuf, const std::string& desStr);
-//	static int set_byteVarChar(StringBuf& desBuf, StringBuf& srcBuf);
 	static int set_stringUnicode1BLen(StringBuf& stringBuf, const std::string& desStr);
 	static int set_stringUnicode2BLen(StringBuf& stringBuf, const std::string& desStr);
 	static int set_wstringUnicode2BLen(StringBuf& stringBuf, const std::wstring& desStr);
+	static int set_wstringUnicode1BLen(StringBuf& stringBuf, const std::wstring& desStr);
 };
 
 #endif /* PROTOCOL_PROTOCOLPACKET_H_ */

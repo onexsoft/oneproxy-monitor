@@ -38,6 +38,12 @@
 class ConnectManager;
 class OneproxyServer:public TcpServer{
 public:
+
+	OneproxyServer() {
+		this->connectManager = NULL;
+		this->stop = false;
+	}
+
 	OneproxyServer(ConnectManager* connectManager) {
 		this->connectManager = connectManager;
 		this->stop = false;
@@ -62,6 +68,14 @@ public:
 	}
 	bool get_stop() {
 		return this->stop;
+	}
+
+	ConnectManager *get_connectManager() {
+		return this->connectManager;
+	}
+
+	void set_connectManager(ConnectManager* connManager) {
+		this->connectManager = connManager;
 	}
 
 	int start_server();

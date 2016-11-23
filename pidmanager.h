@@ -32,6 +32,7 @@
 #include <sstream>
 #include "tool.h"
 #include "systemapi.h"
+#include "config.h"
 
 class PidManager{
 public:
@@ -89,7 +90,11 @@ public:
 #ifndef _WIN32
 		assert(pid_file != NULL);
 		std::stringstream currentProcessId;
-		currentProcessId << getpid();
+		if (config()->get_keepAlive()) {
+			currentProcessId << getppid();
+		} else {
+			currentProcessId << getpid();
+		}
 
 		std::stringstream ss;
 		ss << currentProcessId.str().c_str() << "." << pid_file;
@@ -114,7 +119,11 @@ public:
 #ifndef _WIN32
 		assert(pid_file != NULL);
 		std::stringstream pidFile;
-		pidFile << getpid() << "." << pid_file;
+		if (config()->get_keepAlive()) {
+			pidFile << getppid() << "." << pid_file;
+		} else {
+			pidFile << getpid() << "." << pid_file;
+		}
 		logs(Logger::DEBUG, "unlink_pid: %s", pidFile.str().c_str());
 		if (unlink(pidFile.str().c_str())) {
 			logs(Logger::ERR, "unlink error(%s)", SystemApi::system_strerror());

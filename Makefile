@@ -10,9 +10,10 @@ else #linux
 $(shell if [ ! -d $(BUILD)/$(BUILD_TEST_BIN) ]; then mkdir -p $(BUILD)/$(BUILD_TEST_BIN); fi;)
 	INSTALLDIR = /usr/local/superoneproxy/
 	LDFLAGS = 
+	OPENSSL = /usr/local/openssl
 
-	LIBS = -pthread ./libtcmalloc_minimal.a ./stats/libsqlite3.a ./lib/libssl.a ./lib/libcrypto.a -ldl
-	INCLUDE = -I/usr/local/openssl/include
+	LIBS = -pthread ./libtcmalloc_minimal.a ./stats/libsqlite3.a $(OPENSSL)/lib/libssl.a $(OPENSSL)/lib/libcrypto.a -ldl
+	INCLUDE = -I$(OPENSSL)/include
 endif
 
 CXXFLAGS = -Wall -Wformat=0 -Wno-strict-aliasing -g

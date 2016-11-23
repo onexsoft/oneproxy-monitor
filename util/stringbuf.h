@@ -64,6 +64,10 @@ public:
 		return this->m_buf;
 	}
 
+	inline char* get_offsetAddr() {
+		return (char*)(this->m_buf + this->m_offset);
+	}
+
 	inline unsigned int get_remailLength() {
 		if (this->m_length >= this->m_offset) {
 			return this->m_length - this->m_offset;

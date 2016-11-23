@@ -91,7 +91,7 @@ IMPLEMENT_CVTINT_FUNC(DataBase, cvtInt)
 
 IMPLEMENT_CVTSTRING_FUNC(DataBaseGroup, cvtString)
 IMPLEMENT_CVTINT_FUNC(DataBaseGroup, cvtInt)
-IMPLEMENT_CVTINT_FUNC(DataBaseGroup, cvtBool)
+IMPLEMENT_CVTBOOL_FUNC(DataBaseGroup, cvtBool)
 
 int DataBaseGroup::set_dataBaseGroupVec(std::vector<DataBase>& dbVec,
 		const std::string dbGroupName,

@@ -379,8 +379,9 @@ int Tool::find_sqlKeyWord(const std::string& src, const std::string& dst, bool i
 		lch = (char*)lowerStr.c_str();
 	}
 	char* ch = (char*)src.c_str();
+	unsigned int i = 0;
 
-	for (unsigned int i = 0; i < src.length(); ++i) {
+	for (i = 0; i < src.length(); ++i) {
 		if (ch[i] == '\'' && (i == 0 || (ch[i-1] != '\\'))) {
 			startCharacter = (startCharacter == false ? true : false);
 			continue;
@@ -398,6 +399,9 @@ int Tool::find_sqlKeyWord(const std::string& src, const std::string& dst, bool i
 			di = 0;
 			findPos = -1;
 		}
+	}
+	if (i >= src.length()) {
+		findPos = -1;
 	}
 	return findPos;
 }

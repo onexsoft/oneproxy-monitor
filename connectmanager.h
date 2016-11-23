@@ -98,7 +98,7 @@ private:
 	HttpServer httpServer;
 	Vip vipThread;
 
-	OneproxyServer oneproxyServer;
+	static OneproxyServer oneproxyServer;
 	AssistThread assistThread;
 };
 #endif /* CONNECTMANAGER_H_ */
