@@ -29,37 +29,45 @@
 #include "record.h"
 #include "systemapi.h"
 
-MutexLock Record::mutex;
+namespace stats{
+MutexLock Record::recordMutex;
 int Record::realRecordTime = 10;
 Record* Record::bakRecord = NULL;
+MutexLock Record::bakRecordMutex;
 
 Record* Record::get_recordInstance()
 {
 	static Record* record = NULL;
 
 	if (record == NULL) {
-		Record::mutex.set_name("record_lock");
-		Record::mutex.lock();
+		Record::recordMutex.set_name("record_lock");
+		Record::recordMutex.lock();
 
 		if (record == NULL) {
 			record = new Record();
 		}
 
-		Record::mutex.unlock();
+		Record::recordMutex.unlock();
 	}
 	return record;
 }
 
 Record* Record::get_realTimeRecord()
 {
+	Record* record = NULL;
 	if (Record::bakRecord == NULL) {
-		return Record::get_recordInstance();
+		record =  Record::get_recordInstance();
+	} else {
+		Record::bakRecordMutex.lock();
+		record = Record::get_diffRecord(Record::get_recordInstance(), Record::bakRecord);
+		Record::bakRecordMutex.unlock();
 	}
-	return Record::get_diffRecord(Record::get_recordInstance(), Record::bakRecord);
+	return record;
 }
 
 void Record::bak_record()
 {
+	this->bakRecordMutex.lock();
 	this->bakRecordStartTime = SystemApi::system_millisecond() / 1000;
 	if (this->bakRecord == NULL) {
 		this->bakRecord = new Record();
@@ -71,13 +79,36 @@ void Record::bak_record()
 	this->bakRecord->sum_handingClientConn = record()->sum_handingClientConn;
 	this->bakRecord->sum_waitClientConn = record()->sum_waitClientConn;
 
+	this->sqlInfoMapMutex.lock();
 	this->bakRecord->sqlInfoMap = record()->sqlInfoMap;
+	this->sqlInfoMapMutex.unlock();
+
+	this->transInfoMapMutex.lock();
 	this->bakRecord->transInfoMap = record()->transInfoMap;
+	this->transInfoMapMutex.unlock();
+
+	this->threadInfoMapMutex.lock();
 	this->bakRecord->threadInfoMap = record()->threadInfoMap;
+	this->threadInfoMapMutex.unlock();
+
+	this->clientQueryMapMutex.lock();
 	this->bakRecord->clientQueryMap = record()->clientQueryMap;
+	this->clientQueryMapMutex.unlock();
+
+	this->recordMutexMapMutex.lock();
 	this->bakRecord->recordMutexMap = record()->recordMutexMap;
+	this->recordMutexMapMutex.unlock();
+
+	this->httpServerMutex.lock();
 	this->bakRecord->httpServerRecord = record()->httpServerRecord;
 	this->bakRecord->httpRequestPageCount = record()->httpRequestPageCount;
+	this->httpServerMutex.unlock();
+
+	this->clientUserAppMapMutex.lock();
+	this->bakRecord->clientUserAppMap = record()->clientUserAppMap;
+	this->clientUserAppMapMutex.unlock();
+
+	this->bakRecordMutex.unlock();
 }
 
 Record* Record::get_diffRecord(Record* newRecord, Record* oldRecord)
@@ -92,75 +123,115 @@ Record* Record::get_diffRecord(Record* newRecord, Record* oldRecord)
 	record.httpServerRecord = newRecord->httpServerRecord - oldRecord->httpServerRecord;
 
 	{
-		Record::SqlInfoMap::iterator it = newRecord->sqlInfoMap.begin();
+		newRecord->sqlInfoMapMutex.lock();
+		oldRecord->sqlInfoMapMutex.lock();
+		SqlInfoMap::iterator it = newRecord->sqlInfoMap.begin();
 		for (; it != newRecord->sqlInfoMap.end(); ++it) {
-			Record::SqlInfoMap::iterator oit = oldRecord->sqlInfoMap.find(it->first);
+			SqlInfoMap::iterator oit = oldRecord->sqlInfoMap.find(it->first);
 			if (oit != oldRecord->sqlInfoMap.end()) {
 				record.sqlInfoMap[it->first] = it->second - oit->second;
 			} else {
 				record.sqlInfoMap[it->first] = it->second;
 			}
 		}
+		oldRecord->sqlInfoMapMutex.unlock();
+		newRecord->sqlInfoMapMutex.unlock();
 	}
 
 	{
-		Record::TransInfoMap::iterator it = newRecord->transInfoMap.begin();
+		newRecord->transInfoMapMutex.lock();
+		oldRecord->transInfoMapMutex.lock();
+		TransInfoMap::iterator it = newRecord->transInfoMap.begin();
 		for (; it != newRecord->transInfoMap.end(); ++it) {
-			Record::TransInfoMap::iterator oit = oldRecord->transInfoMap.find(it->first);
+			TransInfoMap::iterator oit = oldRecord->transInfoMap.find(it->first);
 			if (oit != oldRecord->transInfoMap.end()) {
 				record.transInfoMap[it->first] = it->second - oit->second;
 			} else {
 				record.transInfoMap[it->first] = it->second;
 			}
 		}
+		oldRecord->transInfoMapMutex.unlock();
+		newRecord->transInfoMapMutex.unlock();
 	}
 
 	{
-		Record::ThreadInfoMap::iterator it = newRecord->threadInfoMap.begin();
+		newRecord->threadInfoMapMutex.lock();
+		oldRecord->threadInfoMapMutex.lock();
+		ThreadInfoMap::iterator it = newRecord->threadInfoMap.begin();
 		for (; it != newRecord->threadInfoMap.end(); ++it) {
-			Record::ThreadInfoMap::iterator oit = oldRecord->threadInfoMap.find(it->first);
+			ThreadInfoMap::iterator oit = oldRecord->threadInfoMap.find(it->first);
 			if (oit != oldRecord->threadInfoMap.end()) {
 				record.threadInfoMap[it->first] = it->second - oit->second;
 			} else {
 				record.threadInfoMap[it->first] = it->second;
 			}
 		}
+		oldRecord->threadInfoMapMutex.unlock();
+		newRecord->threadInfoMapMutex.unlock();
 	}
 
 	{
-		Record::ClientInfoMap::iterator it = newRecord->clientQueryMap.begin();
+		newRecord->clientQueryMapMutex.lock();
+		oldRecord->clientQueryMapMutex.lock();
+		ClientInfoMap::iterator it = newRecord->clientQueryMap.begin();
 		for (; it != newRecord->clientQueryMap.end(); ++it) {
-			Record::ClientInfoMap::iterator oit = oldRecord->clientQueryMap.find(it->first);
+			ClientInfoMap::iterator oit = oldRecord->clientQueryMap.find(it->first);
 			if (oit != oldRecord->clientQueryMap.end()) {
 				record.clientQueryMap[it->first] = it->second - oit->second;
 			} else {
 				record.clientQueryMap[it->first] = it->second;
 			}
 		}
+		oldRecord->clientQueryMapMutex.unlock();
+		newRecord->clientQueryMapMutex.unlock();
 	}
 
 	{
-		Record::RecordMutexMap::iterator it = newRecord->recordMutexMap.begin();
+		newRecord->clientUserAppMapMutex.lock();
+		oldRecord->clientUserAppMapMutex.lock();
+		ClientUserAppInfoMap::iterator it = newRecord->clientUserAppMap.begin();
+		for (; it != newRecord->clientUserAppMap.end(); ++it) {
+			ClientUserAppInfoMap::iterator oit = oldRecord->clientUserAppMap.find(it->first);
+			if (oit != oldRecord->clientUserAppMap.end()) {
+				record.clientUserAppMap[it->first] = it->second - oit->second;
+			} else {
+				record.clientUserAppMap[it->first] = it->second;
+			}
+		}
+		oldRecord->clientUserAppMapMutex.unlock();
+		newRecord->clientUserAppMapMutex.unlock();
+	}
+
+	{
+		newRecord->recordMutexMapMutex.lock();
+		oldRecord->recordMutexMapMutex.lock();
+		RecordMutexMap::iterator it = newRecord->recordMutexMap.begin();
 		for (; it != newRecord->recordMutexMap.end(); ++it) {
-			Record::RecordMutexMap::iterator oit = oldRecord->recordMutexMap.find(it->first);
+			RecordMutexMap::iterator oit = oldRecord->recordMutexMap.find(it->first);
 			if (oit != oldRecord->recordMutexMap.end()) {
 				record.recordMutexMap[it->first] = it->second - oit->second;
 			} else {
 				record.recordMutexMap[it->first] = it->second;
 			}
 		}
+		oldRecord->recordMutexMapMutex.unlock();
+		newRecord->recordMutexMapMutex.unlock();
 	}
 
 	{
-		Record::RequestPageCountMap::iterator it = newRecord->httpRequestPageCount.begin();
+		newRecord->httpServerMutex.lock();
+		oldRecord->httpServerMutex.lock();
+		RequestPageCountMap::iterator it = newRecord->httpRequestPageCount.begin();
 		for (; it != newRecord->httpRequestPageCount.end(); ++it) {
-			Record::RequestPageCountMap::iterator oit = oldRecord->httpRequestPageCount.find(it->first);
+			RequestPageCountMap::iterator oit = oldRecord->httpRequestPageCount.find(it->first);
 			if (oit != oldRecord->httpRequestPageCount.end()) {
 				record.httpRequestPageCount[it->first] = it->second - oit->second;
 			} else {
 				record.httpRequestPageCount[it->first] = it->second;
 			}
 		}
+		oldRecord->httpServerMutex.unlock();
+		newRecord->httpServerMutex.unlock();
 	}
 
 	return &record;
@@ -168,18 +239,18 @@ Record* Record::get_diffRecord(Record* newRecord, Record* oldRecord)
 
 void Record::record_lock(MutexLock* mutexLock)
 {
-	Record::mutex.lock();
+	this->recordMutexMapMutex.lock();
 	if (mutexLock->get_name().size() > 0)
 		this->recordMutexMap[mutexLock->get_name()].lockNum ++;
-	Record::mutex.unlock();
+	this->recordMutexMapMutex.unlock();
 }
 
 void  Record::record_unlock(MutexLock* mutexLock)
 {
-	Record::mutex.lock();
+	this->recordMutexMapMutex.lock();
 	if (mutexLock->get_name().size() > 0)
 		this->recordMutexMap[mutexLock->get_name()].unlockNum ++;
-	Record::mutex.unlock();
+	this->recordMutexMapMutex.unlock();
 }
 
 void Record::record_acceptClientConn()
@@ -204,26 +275,26 @@ void Record::record_closeClientConn()
 
 void Record::record_threadStartHandingConn(u_uint64 threadId)
 {
-	Record::mutex.lock();
+	this->threadInfoMapMutex.lock();
 	this->threadInfoMap[threadId].sum_allClientConn++;
 	this->threadInfoMap[threadId].sum_handingClientConn++;
 	this->threadInfoMap[threadId].thread_id = threadId;
-	Record::mutex.unlock();
+	this->threadInfoMapMutex.unlock();
 }
 
 void Record::record_threadFinishedConn(u_uint64 threadId)
 {
-	Record::mutex.lock();
+	this->threadInfoMapMutex.lock();
 	this->threadInfoMap[threadId].sum_handingClientConn--;
 	this->threadInfoMap[threadId].sum_finishedClientConn++;
-	Record::mutex.unlock();
+	this->threadInfoMapMutex.unlock();
 }
 
 void Record::record_threadFailConn(u_uint64 threadId)
 {
-	Record::mutex.lock();
+	this->threadInfoMapMutex.lock();
 	this->threadInfoMap[threadId].sum_failClientConn++;
-	Record::mutex.unlock();
+	this->threadInfoMapMutex.unlock();
 }
 
 void Record::record_print()
@@ -247,17 +318,21 @@ void Record::record_print()
 			this->sum_handingClientConn, this->sum_waitClientConn, this->sum_closeClientConn);
 
 	logs(Logger::INFO, "lockName\t lockNum\t unlockNum");
+	this->recordMutexMapMutex.lock();
 	RecordMutexMap::iterator it = recordMutexMap.begin();
 	for (; it != recordMutexMap.end(); ++it) {
 		logs(Logger::INFO, "%s\t %7lld\t %9lld", it->first.c_str(), it->second.lockNum, it->second.unlockNum);
 	}
+	this->recordMutexMapMutex.unlock();
 
 	logs(Logger::INFO, "threadid\t allClientConn\t handingClientConn\t failClientConn");
+	this->threadInfoMapMutex.lock();
 	ThreadInfoMap::iterator tit = threadInfoMap.begin();
 	for (; tit != threadInfoMap.end(); ++tit) {
 		logs(Logger::INFO, "%lld\t %lld\t %lld\t %lld", tit->second.thread_id,
 				tit->second.sum_allClientConn, tit->second.sum_handingClientConn, tit->second.sum_failClientConn);
 	}
+	this->threadInfoMapMutex.unlock();
 }
 
 void Record::record_httpServerClientConnect()
@@ -275,17 +350,16 @@ void Record::record_httpServerClientCloseConnect()
 }
 
 void Record::record_httpServerRequestPage(std::string pageUrl)
-{
-	Record::mutex.lock();
+{//http server is single thread, not need lock.
 	this->httpRequestPageCount[pageUrl] = this->httpRequestPageCount[pageUrl] + 1;
-	Record::mutex.unlock();
 }
 
 void Record::record_clear()
 {
-	this->mutex.lock();
+	this->bakRecordMutex.lock();
 	delete this->bakRecord;
 	this->bakRecord = NULL;
+	this->bakRecordMutex.unlock();
 
 	this->bakRecordStartTime = 0;
 
@@ -294,76 +368,253 @@ void Record::record_clear()
 	this->sum_currentClientConn = 0;
 	this->sum_handingClientConn = 0;
 	this->sum_waitClientConn = 0;
+
+	httpServerMutex.lock();
+	httpServerRecord.clear();
+	RequestPageCountMap::iterator hrpcit = httpRequestPageCount.begin();
+	for (; hrpcit != httpRequestPageCount.end(); ++hrpcit) {
+		hrpcit->second = 0;
+	}
+	httpServerMutex.unlock();
+
+	this->recordMutexMapMutex.lock();
 	RecordMutexMap::iterator it = recordMutexMap.begin();
 	for (; it != recordMutexMap.end(); ++it) {
 		it->second.clear();
 	}
+	this->recordMutexMapMutex.unlock();
+
+	this->threadInfoMapMutex.lock();
 	ThreadInfoMap::iterator tit = threadInfoMap.begin();
 	for (; tit != threadInfoMap.end(); ++tit) {
 		tit->second.clear();
 	}
+	this->threadInfoMapMutex.unlock();
 
-	httpServerRecord.clear();
-
-	Record::RequestPageCountMap::iterator hrpcit = httpRequestPageCount.begin();
-	for (; hrpcit != httpRequestPageCount.end(); ++hrpcit) {
-		hrpcit->second = 0;
-	}
-
+	this->clientQueryMapMutex.lock();
 	ClientInfoMap::iterator cimit = this->clientQueryMap.begin();
 	for (; cimit != this->clientQueryMap.end(); ++cimit) {
 		cimit->second.clear();
 	}
+	this->clientQueryMapMutex.unlock();
 
+	this->sqlInfoMapMutex.lock();
 	SqlInfoMap::iterator simit = this->sqlInfoMap.begin();
 	for (; simit != this->sqlInfoMap.end(); ++simit) {
 		simit->second.clear();
 	}
-	this->mutex.unlock();
+	this->sqlInfoMapMutex.unlock();
 }
 
-void Record::ClientQueryInfo::add_sqlList(unsigned int sqlHashCode)
+SqlInfo* Record::find_sqlInfo(unsigned int sqlHashCode)
 {
-//	logs(Logger::ERR, "ENTER XXXXXXXXXXXXXXXXXXX add_sqlList");
-//	sqlListLock.lock();
-	sqlList.insert(sqlHashCode);
-//	sqlListLock.unlock();
-//	logs(Logger::ERR, "FINISHED XXXXXXXXXXXXXXXXXXX add_sqlList");
-}
+	SqlInfo* sqlInfo = NULL;
 
-void Record::ClientQueryInfo::add_failSqlList(unsigned int sqlHashCode)
-{
-//	logs(Logger::ERR, "ENTER XXXXXXXXXXXXXXXXXXX add_FAILsqlList");
-//	failSqlListLock.lock();
-	failSqlList.insert(sqlHashCode);
-//	failSqlListLock.unlock();
-//	logs(Logger::ERR, "FINISHED XXXXXXXXXXXXXXXXXXX add_failsqlList");
-}
-
-void Record::SqlInfo::add_clientSet(unsigned int clientHashCode)
-{
-//	logs(Logger::ERR, "ENTER XXXXXXXXXXXXXXXXXXX add_clientList");
-//	this->clientSetLock.lock();
-	this->clientSet.insert(clientHashCode);
-//	this->clientSetLock.unlock();
-//	logs(Logger::ERR, "finished XXXXXXXXXXXXXXXXXXX add_clientList");
-}
-
-void Record::SqlInfo::add_tableSet(std::string tableName)
-{
-//	logs(Logger::ERR, "ENTER XXXXXXXXXXXXXXXXXXX add_tableList");
-//	this->tableSetLock.lock();
-	this->tableSet.insert(tableName);
-//	this->tableSetLock.unlock();
-//	logs(Logger::ERR, "finished XXXXXXXXXXXXXXXXXXX add_tableList");
-}
-
-
-Record::SqlInfo* Record::find_sqlInfo(unsigned int sqlHashCode)
-{
-	Record::SqlInfoMap::iterator it = this->sqlInfoMap.find(sqlHashCode);
+	this->sqlInfoMapMutex.lock();
+	SqlInfoMap::iterator it = this->sqlInfoMap.find(sqlHashCode);
 	if (it == this->sqlInfoMap.end())
-		return NULL;
+		sqlInfo = NULL;
 	else
-		return &it->second;
+		sqlInfo =  &it->second;
+	this->sqlInfoMapMutex.unlock();
+
+	return sqlInfo;
+}
+
+void Record::record_clientQueryRecvSize(unsigned int hashCode, unsigned int size)
+{
+	this->clientQueryMapMutex.lock();
+	this->clientQueryMap[hashCode].part.downDataSize += size;
+	this->clientQueryMapMutex.unlock();
+}
+
+void Record::record_clientQuerySendSize(unsigned int hashCode, unsigned int size)
+{
+	this->clientQueryMapMutex.lock();
+	this->clientQueryMap[hashCode].part.upDataSize += size;
+	this->clientQueryMapMutex.unlock();
+}
+
+void Record::record_clientQueryAddSql(Connection& conn) {
+	this->clientQueryMapMutex.lock();
+	this->clientQueryMap[conn.clins()->get_addressHashCode()].sqlList.insert(conn.record.sqlInfo.sqlHashCode);
+	this->clientQueryMapMutex.unlock();
+}
+
+void Record::record_clientQueryExec(unsigned int sqlHashCode, unsigned int clientAddressHashCode)
+{
+	SqlInfo* sqlInfo = this->find_sqlInfo(sqlHashCode);
+	if (sqlInfo == NULL)
+		return;
+
+	this->clientQueryMapMutex.lock();
+	this->clientQueryMap[clientAddressHashCode].part.queryNum++;
+	if (sqlInfo->part.type == stats::sql_op_select) {
+		this->clientQueryMap[clientAddressHashCode].part.selectNum++;
+	} else if (sqlInfo->part.type == stats::sql_op_insert) {
+		this->clientQueryMap[clientAddressHashCode].part.insertNum++;
+	} else if (sqlInfo->part.type == stats::sql_op_update) {
+		this->clientQueryMap[clientAddressHashCode].part.updateNum++;
+	} else if (sqlInfo->part.type == stats::sql_op_delete) {
+		this->clientQueryMap[clientAddressHashCode].part.deleteNum++;
+	}
+	this->clientQueryMapMutex.unlock();
+}
+
+void Record::record_clientQueryExecFail(Connection& conn)
+{
+	this->clientQueryMapMutex.lock();
+	this->clientQueryMap[conn.clins()->get_addressHashCode()].part.queryFailNum++;
+	this->clientQueryMap[conn.clins()->get_addressHashCode()].failSqlList.insert(conn.record.sqlInfo.sqlHashCode);
+	this->clientQueryMapMutex.unlock();
+}
+
+void Record::record_clientQueryOnLineTime(unsigned int hashCode, u_uint64 time)
+{
+	this->clientQueryMapMutex.lock();
+	this->clientQueryMap[hashCode].part.onLineTime += time;
+	this->clientQueryMapMutex.unlock();
+}
+
+void Record::record_clientQueryOffLine(unsigned int hashCode)
+{
+	this->clientQueryMapMutex.lock();
+	this->clientQueryMap[hashCode].part.onLineStatus = false;
+	this->clientQueryMap[hashCode].part.start_connect_time = 0;//断开连接时，设置为0.再排序时，排在最后
+	this->clientQueryMapMutex.unlock();
+}
+
+void Record::record_clientQueryAllocServerFail(unsigned int hashCode)
+{
+	this->clientQueryMapMutex.lock();
+	this->clientQueryMap[hashCode].part.connServerFail++;
+	this->clientQueryMapMutex.unlock();
+}
+
+void Record::record_clientQueryAddNewClient(unsigned int hashCode, std::string address)
+{
+	this->clientQueryMapMutex.lock();
+	this->clientQueryMap[hashCode].part.hashCode = hashCode;
+	this->clientQueryMap[hashCode].part.connectNum ++;
+	this->clientQueryMap[hashCode].ipAddr = address;
+	this->clientQueryMap[hashCode].part.onLineStatus = true;
+	this->clientQueryMap[hashCode].part.start_connect_time = SystemApi::system_millisecond();
+	this->clientQueryMap[hashCode].latest_connect_time = (u_uint64)SystemApi::system_time();
+	this->clientQueryMapMutex.unlock();
+}
+
+void Record::record_sqlInfoRecvSize(unsigned int hashCode, unsigned int size)
+{
+	this->sqlInfoMapMutex.lock();
+	this->sqlInfoMap[hashCode].part.recvSize += size;
+	this->sqlInfoMapMutex.unlock();
+}
+
+void Record::record_sqlInfoAddSql(Connection& conn)
+{
+	this->sqlInfoMapMutex.lock();
+	SqlInfo& sqlInfo = this->sqlInfoMap[conn.record.sqlInfo.sqlHashCode];
+	if (sqlInfo.part.hashCode == 0) {
+		sqlInfo.part.hashCode = conn.record.sqlInfo.sqlHashCode;
+		sqlInfo.sqlText = conn.record.sqlInfo.sqlText;
+		sqlInfo.part.tabs = conn.record.sqlInfo.tableCount;
+		sqlInfo.part.type =  (SqlOp)conn.record.sqlInfo.queryType;
+		sqlInfo.clientSet.insert(conn.clins()->get_addressHashCode());
+		//set table info
+		for (unsigned int i = 0; i < sqlInfo.part.tabs; ++i) {
+			sqlInfo.tableSet.insert(conn.record.sqlInfo.tableNameVec.at(i));
+		}
+	}
+	this->sqlInfoMapMutex.unlock();
+}
+
+void Record::record_sqlInfoExec(unsigned int hashCode)
+{
+	this->sqlInfoMapMutex.lock();
+	this->sqlInfoMap[hashCode].part.exec++;
+	this->sqlInfoMapMutex.unlock();
+}
+
+void Record::record_sqlInfoExecTran(unsigned int hashCode)
+{
+	this->sqlInfoMapMutex.lock();
+	this->sqlInfoMap[hashCode].part.trans++;
+	this->sqlInfoMapMutex.unlock();
+}
+
+void Record::record_sqlInfoRecvResult(Connection& conn, unsigned int rows)
+{
+	time_t ttime = SystemApi::system_millisecond();
+	this->sqlInfoMapMutex.lock();
+	SqlInfo& sqlInfo = this->sqlInfoMap[conn.record.sqlInfo.sqlHashCode];
+	sqlInfo.part.execTime += ttime - conn.record.startQueryTime;
+	if ((conn.record.totalRow != rows) && (rows != 0)) {
+		sqlInfo.part.totalRow += rows;
+	} else {
+		sqlInfo.part.totalRow += conn.record.totalRow;
+	}
+	this->sqlInfoMapMutex.unlock();
+}
+
+void Record::record_sqlInfoExecFail(Connection& conn)
+{
+	time_t ttime = SystemApi::system_millisecond();
+	this->sqlInfoMapMutex.lock();
+	SqlInfo& sqlInfo = this->sqlInfoMap[conn.record.sqlInfo.sqlHashCode];
+	sqlInfo.part.execTime += ttime - conn.record.startQueryTime;
+	sqlInfo.part.fail++;
+	this->sqlInfoMapMutex.unlock();
+}
+
+void Record::record_transInfoEndTrans(unsigned int transHashCode, Connection& conn)
+{
+	u_uint64 finishedTime = SystemApi::system_millisecond();
+	this->transInfoMapMutex.lock();
+	TransInfo& info = this->transInfoMap[transHashCode];
+	{
+		std::set<unsigned int>::iterator it = conn.record.sqlSet.begin();
+		for(; it != conn.record.sqlSet.end(); ++it) {
+			info.sqlHashCode.insert(*it);
+		}
+	}
+
+	info.part.transHashCode = transHashCode;
+	info.lastTime = conn.record.trans_start_time;
+	info.part.exec ++;
+	info.part.lastTime = finishedTime - conn.record.trans_start_time;
+	if (info.part.lastTime > info.part.maxTime) {
+		info.part.maxTime = info.part.lastTime;
+	}
+	if (info.part.lastTime < info.part.minTime) {
+		info.part.minTime = info.part.lastTime;
+	}
+	info.part.sqlNum = conn.record.sqlSet.size();
+	info.part.totalTime += info.part.lastTime;
+
+	if (conn.record.rollback) {
+		info.part.rollbackTimes++;
+	}
+	this->transInfoMapMutex.unlock();
+}
+
+void Record::record_clientUserAppInfoAdd(std::string hostName,
+			std::string userName, std::string appName, unsigned int hashCode)
+{
+	this->clientUserAppMapMutex.lock();
+	ClientUserAppInfo& tmpMap = this->clientUserAppMap[hashCode];
+	tmpMap.appName = appName;
+	tmpMap.hostName = hostName;
+	tmpMap.userName = userName;
+	tmpMap.part.loginTimes ++;
+	tmpMap.hashCode = hashCode;
+	this->clientUserAppMapMutex.unlock();
+}
+
+void Record::record_clientUserAppInfoAddSql(unsigned int hashCode, unsigned int sqlHashCode)
+{
+	this->clientUserAppMapMutex.lock();
+	this->clientUserAppMap[hashCode].sqlList.insert(sqlHashCode);
+	this->clientUserAppMapMutex.unlock();
+}
+
 }

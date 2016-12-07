@@ -76,7 +76,7 @@ public:
 	virtual bool is_currentDatabase(Connection& conn) = 0;
 	virtual int protocol_init(Connection& conn){return 0;}
 	virtual int protocol_getBackendConnect(Connection& conn);
-	int protocol_releaseBackendConnect(Connection& conn);
+	int protocol_releaseBackendConnect(Connection& conn, ConnFinishType type);
 
 	static void* createInstance();
 	virtual void destoryInstance() = 0;
@@ -154,11 +154,15 @@ protected:
 	virtual void stat_recvFinishedRow(Connection& conn, unsigned int rows = 0);
 	//sql语句执行错误，这个函数应该与stat_recvFinishedRow互斥
 	virtual void stat_executeErr(Connection& conn);
+	//统计登录情况
+	virtual void stat_login(Connection& conn);
 
 	//检测socket是否active
 	static bool check_socketActive(NetworkSocket* ns) {return true;}
 	//把连接增加到pool中
 	virtual void add_socketToPool(NetworkSocket* ns);
+	//根据hashcode查找sql语句
+	virtual std::string get_sqlText(unsigned int hashCode);
 };
 
 #endif /* PROTOCOL_PROTOCOLBASE_H_ */

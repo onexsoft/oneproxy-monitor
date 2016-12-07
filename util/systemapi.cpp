@@ -308,7 +308,7 @@ int SystemApi::get_pid()
 
 unsigned int SystemApi::system_cpus()
 {
-	unsigned count = 1; // 至少一个
+	unsigned int count = 1; // 至少一个
 
 #ifdef linux
 	count = sysconf(_SC_NPROCESSORS_CONF);

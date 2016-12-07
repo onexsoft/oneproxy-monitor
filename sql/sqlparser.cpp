@@ -233,6 +233,7 @@ static TokenInfo tokenInfos[] = {
     S(TK_SQL_OUT),
     S(TK_SQL_OUTER),
     S(TK_SQL_OUTFILE),
+	S(TK_SQL_OFF),
     S(TK_SQL_PRECISION),
     S(TK_SQL_PREPARE),
     S(TK_SQL_PRIMARY),
@@ -291,6 +292,7 @@ static TokenInfo tokenInfos[] = {
     S(TK_SQL_TO),
     S(TK_SQL_TRAILING),
     S(TK_SQL_TRANSACTION),
+	S(TK_SQL_TRAN),
     S(TK_SQL_TRIGGER),
     S(TK_SQL_TRUE),
     S(TK_SQL_TRUNCATE),
@@ -334,6 +336,7 @@ static TokenInfo tokenInfos[] = {
     S(TK_SQL_COMMENT), //add by huih@20160204 for pg
     S(TK_SQL_NOTIFY), //add by huih@20160204 for pg
     S(TK_SQL_SAVEPOINT), //add by huih@20160204 for pg
+	S(TK_SQL_IMPLICIT_TRANSACTIONS),
     S(TK_SQL_ZEROFILL),
 
     S(TK_COMMENT_MYSQL),
@@ -1446,10 +1449,9 @@ void SqlParser::show_tokens(int start, int end)
 	if (end <= 0 || end > this->tokenCount())
 		end = this->tokenCount();
 
-	logs(Logger::ERR, "start: %d, end: %d", start, end);
+	logs(Logger::DEBUG, "start: %d, end: %d", start, end);
 	for (int i = start; i < end; ++i) {
 		sql_token* tok = token(i);
-		logs(Logger::INFO, "tokenid: %d, token: %s, type: %s\n",tok->token_id, tok->text.c_str(), tokenInfos[tok->token_id].text);
+		logs(Logger::DEBUG, "tokenid: %d, token: %s, type: %s\n",tok->token_id, tok->text.c_str(), tokenInfos[tok->token_id].text);
 	}
-
 }

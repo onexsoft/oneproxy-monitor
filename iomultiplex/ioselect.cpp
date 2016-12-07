@@ -38,8 +38,7 @@ typedef enum select_event_type_t{
 	SELECT_EVENT_ACCEPT
 }SelectEventType;
 IoSelect::IoSelect(std::string name)
-	:IoEvent(name),
-	 mutexLock("_lock", record())
+	:IoEvent(name)
 {
 	mutexLock.set_name(name + mutexLock.get_name());
 	this->maxfd = 0;

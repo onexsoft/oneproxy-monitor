@@ -95,3 +95,11 @@ void IoEvent::del_ioEventInfo(unsigned int fd) {
 	}
 	this->eventMap.erase(it);
 }
+
+bool IoEvent::is_regesterEvent(unsigned int fd) {
+	IoEvent::IoEventMapType::iterator it = this->eventMap.find(fd);
+	if (it == this->eventMap.end()) {
+		return false;
+	}
+	return true;
+}

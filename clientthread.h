@@ -52,7 +52,7 @@ public:
 
 private:
 	void handle_readFrontData(unsigned int fd);
-	void finished_connection(Connection* con);
+	void finished_connection(Connection* con, ConnFinishType type);
 	void get_serverFailed(Connection *con);
 	int alloc_server(Connection* con);
 	int parse_frontDataPacket(Connection* con);

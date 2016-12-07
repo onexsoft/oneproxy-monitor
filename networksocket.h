@@ -38,6 +38,7 @@
 #include "logger.h"
 #include "stringbuf.h"
 #include "systemapi.h"
+#include "conf/config.h"
 
 typedef union _addr {
 	struct sockaddr sa;
@@ -88,6 +89,7 @@ public:
 		this->m_connectionType = connection_stream;
 		this->m_addressHashCode = 0;
 		this->m_bufPointer = NULL;
+		this->m_dataBase = NULL;
 	}
 	NetworkSocket(std::string address, int port) {
 		this->m_address = address;
@@ -96,6 +98,7 @@ public:
 		this->m_connectionType = connection_stream;
 		this->m_addressHashCode = 0;
 		this->m_bufPointer = NULL;
+		this->m_dataBase = NULL;
 	}
 	~NetworkSocket() {
 		if (this->m_attachData.pointer != NULL && this->m_attachData.pointer_desFunc != NULL) {
@@ -108,6 +111,8 @@ public:
 			closeSocket(m_fd);
 			m_fd = 0;
 		}
+
+		this->dec_dataBaseConnect();
 	}
 	static void destroy_networkSocket(void* ns) {
 		NetworkSocket* tns = (NetworkSocket*)ns;
@@ -134,7 +139,11 @@ public:
 	void save_data(StringBuf& buf);
 	void closeSocket(unsigned int fd);
 	void clear_dataBuf();
+	void clear_sendData();
 
+	//add database connect count
+	void inc_dataBaseConnect();
+	void dec_dataBaseConnect();
 private:
 	declare_class_member(unsigned int, fd)
 	declare_class_member(unsigned int, port)
@@ -152,6 +161,9 @@ private:
 
 	declare_class_member_co(Addr, addr)
 	declare_class_member_co(SocketAttachData, attachData)
+
+	//当前socket所属的数据库
+	declare_class_member(DataBase*, dataBase);
 };
 
 #endif /* NETWORKSOCKET_H_ */

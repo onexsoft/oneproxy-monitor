@@ -42,13 +42,10 @@ bool ConnectManager::stop = false;
 OneproxyServer ConnectManager::oneproxyServer;
 
 ConnectManager::ConnectManager(int threadNum):
-	mutexLock(std::string("connectManager_taskQueue_lock"), record()),
-	runningTaskQueueMutexLock(std::string("connectManager_runningTaskQueue_lock"),  record()),
 	httpServer(config()->get_httpServerAddr(), config()->get_httpServerPort(), std::string("httpserver")),
 	vipThread(config()->get_vipIfName(), config()->get_vipAddress(), std::string("vipthread")),
 	assistThread(this)
 {
-
 	ConnectManager::oneproxyServer.set_connectManager(this);
 
 	int i = 0;
@@ -77,6 +74,7 @@ ConnectManager::~ConnectManager()
 
 void ConnectManager::add_task(NetworkSocket* clientSocket)
 {
+	logs(Logger::DEBUG, "add_task: %d", clientSocket->get_fd());
 	mutexLock.lock();
 	this->taskQueue.push(clientSocket);
 	mutexLock.unlock();
@@ -169,6 +167,7 @@ void ConnectManager::finished_task(u_uint64 threadId, NetworkSocket *ns)
 	it->second.erase(tit);
 	this->runningTaskQueueMutexLock.unlock();
 
+	logs(Logger::DEBUG, "runningTaskQueue.size: %d", it->second.size());
 	record()->record_closeClientConn();
 }
 
@@ -236,6 +235,10 @@ void ConnectManager::start()
 	signal(SIGINT, ConnectManager::handle_signal);
 	signal(SIGUSR1, ConnectManager::handle_signal);
 	signal(SIGUSR2, ConnectManager::handle_signal);
+#ifndef _WIN32
+	signal(SIGPIPE, SIG_IGN);
+#endif
+	signal(SIGFPE, SIG_IGN);
 
 	//close old process.
 	if (config()->get_pidFilePath().size() > 0) {
@@ -253,7 +256,7 @@ void ConnectManager::start()
 	}
 
 	logs(Logger::ERR, "start to connect  manager...");
-	while(!ConnectManager::stop || this->taskQueue.size()) {
+	while(!ConnectManager::stop || (this->get_taskSize() > 0)) {
 		if (this->get_taskSize() > 0) {
 			this->alloc_task();
 			ConnectManager::oneproxyServer.run_server(0);
@@ -281,6 +284,7 @@ void ConnectManager::start()
 
 void ConnectManager::handle_signal(int sig)
 {
+	logs(Logger::ERR, "start to logout...");
 	ConnectManager::oneproxyServer.stop_tcpServer();
 	ConnectManager::stop = true;
 	return ;

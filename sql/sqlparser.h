@@ -232,6 +232,7 @@ typedef enum {
     TK_SQL_OUT,
     TK_SQL_OUTER,
     TK_SQL_OUTFILE,
+	TK_SQL_OFF, //add by huih@20161125 for jdbc
     TK_SQL_PRECISION,
     TK_SQL_PREPARE,
     TK_SQL_PRIMARY,
@@ -290,6 +291,7 @@ typedef enum {
     TK_SQL_TO,
     TK_SQL_TRAILING,
     TK_SQL_TRANSACTION,
+	TK_SQL_TRAN,
     TK_SQL_TRIGGER,
     TK_SQL_TRUE,
     TK_SQL_TRUNCATE,
@@ -334,6 +336,7 @@ typedef enum {
     TK_SQL_COMMENT, //add by huih@20160204 for pg
     TK_SQL_NOTIFY, //add by huih@20160204 for pg
     TK_SQL_SAVEPOINT, //add by huih@20160204 for pg
+	TK_SQL_IMPLICIT_TRANSACTIONS,//add by huih@20161125 for jdbc.
     TK_SQL_ZEROFILL,
 
     TK_COMMENT_MYSQL,
@@ -425,7 +428,6 @@ public:
     bool isRollBack(){return this->queryType() == Rollback;}
     bool isEndTrans(){return ((this->queryType() == Commit) || (this->queryType() == Rollback));}
     bool isStartTrans();
-
     void show_tokens(int start = 0, int end = 0);
 
 private:

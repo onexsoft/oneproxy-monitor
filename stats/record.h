@@ -32,35 +32,23 @@
 #include "logger.h"
 #include "mutexlock.h"
 #include "record_define.h"
+#include "connection.h"
 
-#define record() Record::get_recordInstance()
+
+#define record() stats::Record::get_recordInstance()
+
+namespace stats{
+declare_type_alias(RecordMutexMap, std::map<std::string, Record_Mutex>)
+declare_type_alias(ThreadInfoMap, std::map<u_uint64, Thread_Info>)//key: thread_id
+declare_type_alias(RequestPageCountMap, std::map<std::string, u_uint64>)//key: page url, value:num
+declare_type_alias(ClientInfoMap, std::map<unsigned int, ClientQueryInfo>) //key: ip hashcode
+declare_type_alias(ClientUserAppInfoMap, std::map<unsigned int, ClientUserAppInfo>)
+declare_type_alias(SqlInfoMap, std::map<unsigned int, SqlInfo>) ////key: hashcode
+declare_type_alias(TableInfoMap, std::map<std::string, TableInfo>)
+declare_type_alias(TableMapInfoMap, std::map<std::string, TableMapInfo>)
+declare_type_alias(TransInfoMap, std::map<unsigned int, TransInfo>)//key is sqlhashcode list hashcode
 
 class Record{
-public:
-	declare_type_alias(SqlOp, stats::SqlOp)
-	declare_type_alias(SqlInfo, stats::SqlInfo)
-	declare_type_alias(TableInfo, stats::TableInfo)
-	declare_type_alias(TransInfo, stats::TransInfo)
-	declare_type_alias(Thread_Info, stats::Thread_Info)
-	declare_type_alias(SqlInfoPart, stats::SqlInfoPart)
-	declare_type_alias(Record_Mutex, stats::Record_Mutex)
-	declare_type_alias(TableMapInfo, stats::TableMapInfo)
-	declare_type_alias(TransInfoPart, stats::TransInfoPart)
-	declare_type_alias(TableInfoPart, stats::TableInfoPart)
-	declare_type_alias(ClientQueryInfo, stats::ClientQueryInfo)
-	declare_type_alias(HttpServerRecord, stats::HttpServerRecord)
-	declare_type_alias(TableMapInfoPart, stats::TableMapInfoPart)
-	declare_type_alias(ClientQueryInfoPart, stats::ClientQueryInfoPart)
-
-	declare_type_alias(RecordMutexMap, std::map<std::string, Record_Mutex>)
-	declare_type_alias(ThreadInfoMap, std::map<u_uint64, Thread_Info>)//key: thread_id
-	declare_type_alias(RequestPageCountMap, std::map<std::string, u_uint64>)//key: page url, value:num
-	declare_type_alias(ClientInfoMap, std::map<unsigned int, ClientQueryInfo>) //key: ip hashcode
-	declare_type_alias(SqlInfoMap, std::map<unsigned int, SqlInfo>) ////key: hashcode
-	declare_type_alias(TableInfoMap, std::map<std::string, TableInfo>)
-	declare_type_alias(TableMapInfoMap, std::map<std::string, TableMapInfo>)
-	declare_type_alias(TransInfoMap, std::map<unsigned int, TransInfo>)//key is sqlhashcode list hashcode
-
 public:
 	static Record* get_recordInstance();
 	static Record* get_realTimeRecord();
@@ -86,6 +74,28 @@ public:
 		this->record_print_time_interval = time;
 	}
 
+	void record_clientQueryRecvSize(unsigned int hashCode, unsigned int size);
+	void record_clientQuerySendSize(unsigned int hashCode, unsigned int size);
+	void record_clientQueryAddSql(Connection& conn);
+	void record_clientQueryExec(unsigned int sqlHashCode, unsigned int clientAddressHashCode);
+	void record_clientQueryExecFail(Connection& conn);
+	void record_clientQueryOnLineTime(unsigned int hashCode, u_uint64 time);
+	void record_clientQueryOffLine(unsigned int hashCode);
+	void record_clientQueryAllocServerFail(unsigned int hashCode);
+	void record_clientQueryAddNewClient(unsigned int hashCode, std::string address);
+
+	void record_sqlInfoRecvSize(unsigned int hashCode, unsigned int size);
+	void record_sqlInfoAddSql(Connection& conn);
+	void record_sqlInfoExec(unsigned int hashCode);
+	void record_sqlInfoExecTran(unsigned int hashCode);
+	void record_sqlInfoRecvResult(Connection& conn, unsigned int rows);
+	void record_sqlInfoExecFail(Connection& conn);
+
+	void record_transInfoEndTrans(unsigned int hashCode, Connection& conn);
+
+	void record_clientUserAppInfoAdd(std::string hostName,
+			std::string userName, std::string appName, unsigned int hashCode);
+	void record_clientUserAppInfoAddSql(unsigned int hashCode, unsigned int sqlHashCode);
 private:
 	Record() {
 		this->sum_clientConn = 0;
@@ -108,19 +118,35 @@ public:
 	u_uint64 sum_closeClientConn;//从系统启动到目前关闭的客户端连接
 
 	SqlInfoMap sqlInfoMap;//sql语句查询的统计情况
+	MutexLock sqlInfoMapMutex;
+
 	TransInfoMap transInfoMap; //事务的统计情况
+	MutexLock transInfoMapMutex;
+
 	ThreadInfoMap threadInfoMap;//线程信息的统计
+	MutexLock threadInfoMapMutex;
+
 	ClientInfoMap clientQueryMap;//客户端查询信息的统计情况
+	MutexLock clientQueryMapMutex;
+
 	RecordMutexMap recordMutexMap; //锁使用情况的统计
+	MutexLock recordMutexMapMutex;
+
 	HttpServerRecord httpServerRecord;//http server的统计
 	RequestPageCountMap httpRequestPageCount;//http server 请求页的统计情况
+	MutexLock httpServerMutex;
 
-	static MutexLock mutex;
+	ClientUserAppInfoMap clientUserAppMap; //按照user ,host, app name进行统计
+	MutexLock clientUserAppMapMutex;
+
+	static MutexLock recordMutex;
 	int record_print_time_interval;//second
 	static int realRecordTime;
 
+	static MutexLock bakRecordMutex;
 	static Record *bakRecord;
 	u_uint64 bakRecordStartTime;
 };
+}
 
 #endif /* RECORD_H_ */

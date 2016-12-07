@@ -36,6 +36,7 @@
 #include <sstream>
 #include "systemapi.h"
 #include "tool.h"
+#include "conf/config.h"
 
 #ifdef linux
 #define offsetof(TYPE, MEMBER) __builtin_offsetof (TYPE, MEMBER)
@@ -47,6 +48,7 @@ HttpResponse::HttpResponse()
 	this->response_setMenu(this->topMenu);
 
 	this->responseFuncMap["/topclients"] = &HttpResponse::response_topclients;
+	this->responseFuncMap["/topwho"] = &HttpResponse::response_topwho;
 	this->responseFuncMap["/topsqls"] = &HttpResponse::response_topsqls;
 	this->responseFuncMap["/toptables"] = &HttpResponse::response_toptables;
 	this->responseFuncMap["/toptablesmap"] = &HttpResponse::response_toptablesMap;
@@ -62,6 +64,7 @@ HttpResponse::HttpResponse()
 	this->responseFuncMap["/taskthread"] = &HttpResponse::response_taskThread;
 	this->responseFuncMap["/lock"] = &HttpResponse::response_lock;
 	this->responseFuncMap["/htmlpage"] = &HttpResponse::response_htmlPage;
+	this->responseFuncMap["/database"] = &HttpResponse::response_dataBase;
 }
 
 HttpResponse::~HttpResponse()
@@ -76,15 +79,17 @@ void HttpResponse::response_setMenu(TopMenu& topMenu)
 		add_subTopMenu("Reset Stats", "rsstats")
 		add_subTopMenu("Setting", "setting")
 
-		add_topMenu("OneProxy", "oneproxy")
+		add_topMenu("OneProxy", "database")
+		add_subTopMenu("DataBase", "database")
 		add_subTopMenu("Task", "task")
-		add_subTopMenu("TaskThread", "taskthread")
-		add_subTopMenu("Lock", "lock")
+//		add_subTopMenu("TaskThread", "taskthread")
+//		add_subTopMenu("Lock", "lock")
 		add_subTopMenu("HtmlPage", "htmlpage")
 
 		add_topMenu("Statspack", "topsqls")
 		add_subTopMenu("Top SQLS", "topsqls")
 		add_subTopMenu("Top Clients", "topclients")
+		add_subTopMenu("Top Who", "topwho")
 		add_subTopMenu("Top Tables", "toptables")
 		add_subTopMenu("Top TablesMap", "toptablesmap")
 		add_subTopMenu("Top Trans", "toptrans")
@@ -93,6 +98,7 @@ void HttpResponse::response_setMenu(TopMenu& topMenu)
 		add_topMenu_realTime("Realtime", "topsqls")
 		add_subTopMenu_realTime("Top SQLS", "topsqls")
 		add_subTopMenu_realTime("Top Clients", "topclients")
+		add_subTopMenu_realTime("Top Who", "topwho")
 		add_subTopMenu_realTime("Top Tables", "toptables")
 		add_subTopMenu_realTime("Top TablesMap", "toptablesmap")
 		add_subTopMenu_realTime("Top Trans", "toptrans")
@@ -175,11 +181,11 @@ int HttpResponse::response_get(Http& http)
 
 void HttpResponse::response_topclients(Http& http)
 {
-#define asc(field) order_func(u_uint64, Record::ClientQueryInfoPart, field, true)
-#define desc(field) order_func(u_uint64, Record::ClientQueryInfoPart, field, false)
+#define asc(field) order_func(u_uint64, stats::ClientQueryInfoPart, field, true)
+#define desc(field) order_func(u_uint64, stats::ClientQueryInfoPart, field, false)
 #define order_field(field)  asc(field), desc(field)
-#define order_field_bool(field) order_func(bool, Record::ClientQueryInfoPart, field, true), \
-	order_func(bool, Record::ClientQueryInfoPart, field, false)
+#define order_field_bool(field) order_func(bool, stats::ClientQueryInfoPart, field, true), \
+	order_func(bool, stats::ClientQueryInfoPart, field, false)
 
 	static TableTitleInfo tti[] = {
 			{"HashCode", "hash code", "", "",NULL, NULL},
@@ -211,7 +217,7 @@ void HttpResponse::response_topclients(Http& http)
 	UriParam uriParam;
 	//1. parse uri param
 	this->parse_uriParam(http, uriParam);
-	Record* record = NULL;
+	stats::Record* record = NULL;
 	if (uriParam.isRealTime) {
 		record = record()->get_realTimeRecord();
 	} else {
@@ -219,22 +225,24 @@ void HttpResponse::response_topclients(Http& http)
 	}
 
 	//2. sort
-	std::vector<Record::ClientQueryInfo*> clientInfoVec;
-	Record::ClientInfoMap tmpMap;
+	std::vector<stats::ClientQueryInfo*> clientInfoVec;
+	stats::ClientInfoMap tmpMap;
 	if (uriParam.sqlhashcode <= 0) {
-		this->change_map2vecSort<std::vector<Record::ClientQueryInfo*>, Record::ClientInfoMap, Record::ClientInfoMap::iterator>
+		record->clientQueryMapMutex.lock();
+		this->change_map2vecSort<std::vector<stats::ClientQueryInfo*>, stats::ClientInfoMap, stats::ClientInfoMap::iterator>
 		(ttiv, uriParam, clientInfoVec, record->clientQueryMap);
+		record->clientQueryMapMutex.unlock();
 	} else {
-		Record::mutex.lock();
-		Record::ClientInfoMap::iterator it = record->clientQueryMap.begin();
+		record->clientQueryMapMutex.lock();
+		stats::ClientInfoMap::iterator it = record->clientQueryMap.begin();
 		for (; it != record->clientQueryMap.end(); ++it) {
 			if (it->second.sqlList.find(uriParam.sqlhashcode) != it->second.sqlList.end()) {
 				if (it->second.is_show())
 					tmpMap[it->first] = it->second;
 			}
 		}
-		Record::mutex.unlock();
-		this->change_map2vecSort<std::vector<Record::ClientQueryInfo*>, Record::ClientInfoMap, Record::ClientInfoMap::iterator>
+		record->clientQueryMapMutex.unlock();
+		this->change_map2vecSort<std::vector<stats::ClientQueryInfo*>, stats::ClientInfoMap, stats::ClientInfoMap::iterator>
 		(ttiv, uriParam, clientInfoVec, tmpMap);
 	}
 
@@ -251,7 +259,7 @@ void HttpResponse::response_topclients(Http& http)
 	endIndex = endIndex > clientInfoVec.size() ? clientInfoVec.size() : endIndex;
 
 	for (unsigned int i = startIndex; i < endIndex; ++i) {
-		Record::ClientQueryInfo* it = clientInfoVec[i];
+		stats::ClientQueryInfo* it = clientInfoVec[i];
 		it->part.sqlSize = it->sqlList.size();
 
 		http.outputBuf.append("<tr>");
@@ -284,12 +292,78 @@ void HttpResponse::response_topclients(Http& http)
 	http.outputBuf.append("</table>");
 }
 
+void HttpResponse::response_topwho(Http& http)
+{
+#define asc(field) order_func(u_uint64, stats::ClientUserAppInfoPart, field, true)
+#define desc(field) order_func(u_uint64, stats::ClientUserAppInfoPart, field, false)
+#define order_field(field)  asc(field), desc(field)
+
+	static TableTitleInfo tti[] = {
+		{"Host</br>Name", "client host name", "", "",NULL, NULL},
+		{"User</br>Name", "user name", "", "", NULL, NULL},
+		{"App</br>Name", "client app name", "", "", NULL, NULL},
+		{"Login</br>Times", "the number of client login oneproxy", "loginTimes", "", order_field(loginTimes)},
+		{"SQLs", "the number of SQL that the client execute", "sqlcount", "", order_field(sqlcount)},
+		{"", "", "", "", NULL, NULL},
+	};
+#undef asc
+#undef desc
+#undef order_field
+
+	TableTitleInfoVec ttiv;
+	ttiv.push_back(tti);
+
+	UriParam uriParam;
+	//1. parse uri param
+	this->parse_uriParam(http, uriParam);
+	stats::Record* record = NULL;
+	if (uriParam.isRealTime) {
+		record = record()->get_realTimeRecord();
+	} else {
+		record = record();
+	}
+
+	//2. sort
+	std::vector<stats::ClientUserAppInfo*> clientUserAppInfoVec;
+	stats::ClientUserAppInfoMap tmpMap;
+	record->clientUserAppMapMutex.lock();
+	this->change_map2vecSort<std::vector<stats::ClientUserAppInfo*>, stats::ClientUserAppInfoMap, stats::ClientUserAppInfoMap::iterator>
+		(ttiv, uriParam, clientUserAppInfoVec, record->clientUserAppMap);
+	record->clientUserAppMapMutex.unlock();
+
+	//3. generate table header
+	this->gen_tableTitle(ttiv, uriParam, "Top Who", clientUserAppInfoVec.size(), http);
+
+	//4. generate the table data
+	unsigned int startIndex = (uriParam.currentPage - 1) * httpServerConfig.pageSize;
+	unsigned int endIndex = (uriParam.currentPage) * httpServerConfig.pageSize;
+	if (httpServerConfig.current_page_home && httpServerConfig.home_clients_rows > 0) {
+		startIndex = 0;
+		endIndex = httpServerConfig.home_clients_rows;
+	}
+	endIndex = endIndex > clientUserAppInfoVec.size() ? clientUserAppInfoVec.size() : endIndex;
+
+	for (unsigned int i = startIndex; i < endIndex; ++i) {
+		stats::ClientUserAppInfo* it = clientUserAppInfoVec[i];
+		it->part.sqlcount = it->sqlList.size();
+
+		http.outputBuf.append("<tr>");
+		http.outputBuf.appendFormat("<td>%s</td>", it->hostName.c_str());
+		http.outputBuf.appendFormat("<td>%s</td>", it->userName.c_str());
+		http.outputBuf.appendFormat("<td>%s</td>", it->appName.c_str());
+		http.outputBuf.appendFormat("<td>%lld</td>", it->part.loginTimes);
+		http.outputBuf.appendFormat("<td><a href='topsqls?clientuserappinfohashcode=%u'>%lld</a></td>", it->hashCode, it->part.sqlcount);
+		http.outputBuf.append("</tr>");
+	}
+	http.outputBuf.append("</table>");
+}
+
 void HttpResponse::response_topsqls(Http& http)
 {
 	UriParam uriParam;
 
-#define asc(field) order_func(u_uint64, Record::SqlInfoPart, field, true)
-#define desc(field) order_func(u_uint64, Record::SqlInfoPart, field, false)
+#define asc(field) order_func(u_uint64, stats::SqlInfoPart, field, true)
+#define desc(field) order_func(u_uint64, stats::SqlInfoPart, field, false)
 #define order_field(field)  asc(field), desc(field)
 	static TableTitleInfo tti[] = {
 		init_tableTitle("Hash</br>Code", "the hash value of sql text"),
@@ -314,7 +388,7 @@ void HttpResponse::response_topsqls(Http& http)
 
 	//1. parse uri param
 	this->parse_uriParam(http, uriParam);
-	Record* record = NULL;
+	stats::Record* record = NULL;
 	if (uriParam.isRealTime) {
 		record = record()->get_realTimeRecord();
 	} else {
@@ -322,40 +396,59 @@ void HttpResponse::response_topsqls(Http& http)
 	}
 
 	//2. sort
-	std::vector<Record::SqlInfo*> sqlInfoVec;
-	Record::SqlInfoMap tmpMap;
+	std::vector<stats::SqlInfo*> sqlInfoVec;
+	stats::SqlInfoMap tmpMap;
 	if (uriParam.clientHashCode > 0) {
-		Record::mutex.lock();
-		Record::SqlInfoMap::iterator it = record->sqlInfoMap.begin();
+		record->sqlInfoMapMutex.lock();
+		stats::SqlInfoMap::iterator it = record->sqlInfoMap.begin();
 		for (; it != record->sqlInfoMap.end(); ++it) {
 			if (it->second.clientSet.find(uriParam.clientHashCode) != it->second.clientSet.end()) {
 				if (it->second.is_show()) {
 					if (uriParam.sqltype == 0) {//show all sql
 						tmpMap[it->first] = it->second;
 					} else if (it->second.part.fail > 0) {//show fail sql
-							tmpMap[it->first] = it->second;
+						tmpMap[it->first] = it->second;
 					}
 				}
 			}
 		}
-		Record::mutex.unlock();
-		this->change_map2vecSort<std::vector<Record::SqlInfo*>, Record::SqlInfoMap, Record::SqlInfoMap::iterator>
+		record->sqlInfoMapMutex.unlock();
+		this->change_map2vecSort<std::vector<stats::SqlInfo*>, stats::SqlInfoMap, stats::SqlInfoMap::iterator>
 		(ttiv, uriParam, sqlInfoVec, tmpMap);
 	} else if (uriParam.tableName.size() > 0) {
-		Record::mutex.lock();
-		Record::SqlInfoMap::iterator it = record->sqlInfoMap.begin();
+		record->sqlInfoMapMutex.lock();
+		stats::SqlInfoMap::iterator it = record->sqlInfoMap.begin();
 		for (; it != record->sqlInfoMap.end(); ++it) {
 			if (it->second.tableSet.find(uriParam.tableName) != it->second.tableSet.end()) {
 				if (it->second.is_show())
 					tmpMap[it->first] = it->second;
 			}
 		}
-		Record::mutex.unlock();
-		this->change_map2vecSort<std::vector<Record::SqlInfo*>, Record::SqlInfoMap, Record::SqlInfoMap::iterator>
+		record->sqlInfoMapMutex.unlock();
+		this->change_map2vecSort<std::vector<stats::SqlInfo*>, stats::SqlInfoMap, stats::SqlInfoMap::iterator>
 		(ttiv, uriParam, sqlInfoVec, tmpMap);
+
+	} else if (uriParam.clientuserappinfohashcode > 0) {
+		if (record->clientUserAppMap.find(uriParam.clientuserappinfohashcode) != record->clientUserAppMap.end()){
+			record->clientUserAppMapMutex.lock();
+			stats::ClientUserAppInfo& info = record->clientUserAppMap[uriParam.clientuserappinfohashcode];
+			record->clientUserAppMapMutex.unlock();
+
+			std::set<unsigned int>::iterator it = info.sqlList.begin();
+			for (; it != info.sqlList.end(); ++it) {
+				stats::SqlInfoMap::iterator sit = record->sqlInfoMap.find(*it);
+				if (sit != record->sqlInfoMap.end()) {
+					tmpMap[sit->first] = sit->second;
+				}
+			}
+			this->change_map2vecSort<std::vector<stats::SqlInfo*>, stats::SqlInfoMap, stats::SqlInfoMap::iterator>
+			(ttiv, uriParam, sqlInfoVec, tmpMap);
+		}
 	} else {
-		this->change_map2vecSort<std::vector<Record::SqlInfo*>, Record::SqlInfoMap, Record::SqlInfoMap::iterator>
+		record->sqlInfoMapMutex.lock();
+		this->change_map2vecSort<std::vector<stats::SqlInfo*>, stats::SqlInfoMap, stats::SqlInfoMap::iterator>
 		(ttiv, uriParam, sqlInfoVec, record->sqlInfoMap);
+		record->sqlInfoMapMutex.unlock();
 	}
 
 	//3. generate table header
@@ -371,13 +464,14 @@ void HttpResponse::response_topsqls(Http& http)
 	endIndex = endIndex > sqlInfoVec.size() ? sqlInfoVec.size() : endIndex;
 
 	for (unsigned int i = startIndex; i < endIndex; ++i) {
-		Record::SqlInfo* it = sqlInfoVec[i];
+		stats::SqlInfo* it = sqlInfoVec[i];
 		it->part.clientSetSize = (u_uint64)it->clientSet.size();
 		it->part.sqlSize = (u_uint64)it->sqlText.length();
 		http.outputBuf.append("<tr>");
 		http.outputBuf.appendFormat("<td><a href='findsql?sqlhashcode=%u'>%u</a></td>",
 				it->part.hashCode, it->part.hashCode);
-		http.outputBuf.appendFormat("<td>%s</td>", Tool::format_string((const char*)it->sqlText.c_str(), 64));
+		std::string tmpst = Tool::format_string((const char*)it->sqlText.c_str(), it->sqlText.length(), 64);
+		http.outputBuf.appendFormat("<td>%s</td>", tmpst.c_str());
 		http.outputBuf.appendFormat("<td>%lld</td>", it->part.tabs);
 		http.outputBuf.appendFormat("<td>%lld</td>", it->part.exec);
 		http.outputBuf.appendFormat("<td>%lld</td>", it->part.trans);
@@ -398,8 +492,8 @@ void HttpResponse::response_toptables(Http& http)
 {
 	UriParam uriParam;
 
-	#define asc(field) order_func(u_uint64, Record::TableInfoPart, field, true)
-	#define desc(field) order_func(u_uint64, Record::TableInfoPart, field, false)
+	#define asc(field) order_func(u_uint64, stats::TableInfoPart, field, true)
+	#define desc(field) order_func(u_uint64, stats::TableInfoPart, field, false)
 
 	static TableTitleInfo tti1[] = {
 			init_tableTitle_nohref("TableName", "the table name in sql", "rowspan='2'"),
@@ -435,7 +529,7 @@ void HttpResponse::response_toptables(Http& http)
 	//1. parse uri param
 	this->parse_uriParam(http, uriParam);
 
-	Record* record = NULL;
+	stats::Record* record = NULL;
 	if (uriParam.isRealTime) {
 		record = record()->get_realTimeRecord();
 	} else {
@@ -443,13 +537,14 @@ void HttpResponse::response_toptables(Http& http)
 	}
 
 	//get table info base sql map
-	Record::TableInfoMap tableInfoMap;
-	Record::SqlInfoMap::iterator it = record->sqlInfoMap.begin();
+	stats::TableInfoMap tableInfoMap;
+	record->sqlInfoMapMutex.lock();
+	stats::SqlInfoMap::iterator it = record->sqlInfoMap.begin();
 	for (; it != record->sqlInfoMap.end(); ++it) {
-		Record::SqlInfo& sqlInfo = it->second;
+		stats::SqlInfo& sqlInfo = it->second;
 		if (it->second.is_show() == false)
 			continue;
-//		sqlInfo.tableSetLock.lock();
+
 		std::set<std::string>::iterator sit = sqlInfo.tableSet.begin();
 		for(; sit != sqlInfo.tableSet.end(); ++sit) {
 			tableInfoMap[*sit].part.sqls++;
@@ -489,15 +584,16 @@ void HttpResponse::response_toptables(Http& http)
 			}
 		}
 	}
+	record->sqlInfoMapMutex.unlock();
 
 	TableTitleInfoVec ttiv;
 	ttiv.push_back(tti1);
 	ttiv.push_back(tti2);
 
 	//2. sort
-	std::vector<Record::TableInfo*> tableInfoVec;
+	std::vector<stats::TableInfo*> tableInfoVec;
 
-	this->change_map2vecSort<std::vector<Record::TableInfo*>, Record::TableInfoMap, Record::TableInfoMap::iterator>
+	this->change_map2vecSort<std::vector<stats::TableInfo*>, stats::TableInfoMap, stats::TableInfoMap::iterator>
 	(ttiv, uriParam, tableInfoVec, tableInfoMap);
 
 	//3. generate table header
@@ -508,7 +604,7 @@ void HttpResponse::response_toptables(Http& http)
 	unsigned int endIndex = (uriParam.currentPage) * httpServerConfig.pageSize;
 	endIndex = endIndex > tableInfoVec.size() ? tableInfoVec.size() : endIndex;
 	for (unsigned int i = startIndex; i < endIndex; ++i) {
-		Record::TableInfo* it = tableInfoVec[i];
+		stats::TableInfo* it = tableInfoVec[i];
 		http.outputBuf.append("<tr>");
 		http.outputBuf.appendFormat("<td>%s</td>", it->tableName.c_str());
 		http.outputBuf.appendFormat("<td><a href='topsqls?tablename=%s'>%lld</a></td>",
@@ -534,8 +630,8 @@ void HttpResponse::response_toptablesMap(Http& http)
 {
 	UriParam uriParam;
 
-	#define asc(field) order_func(u_uint64, Record::TableMapInfoPart, field, true)
-	#define desc(field) order_func(u_uint64, Record::TableMapInfoPart, field, false)
+	#define asc(field) order_func(u_uint64, stats::TableMapInfoPart, field, true)
+	#define desc(field) order_func(u_uint64, stats::TableMapInfoPart, field, false)
 	#define order_field(field)  asc(field), desc(field)
 	static TableTitleInfo tti[] = {
 			{"Tables", "the name of tables in sql, the start of qry represent simple query; trx represent in translation", "", "", NULL, NULL},
@@ -550,9 +646,9 @@ void HttpResponse::response_toptablesMap(Http& http)
 	//1. parse uri param
 	this->parse_uriParam(http, uriParam);
 
-	Record::TableMapInfoMap tableMapInfoMap;
+	stats::TableMapInfoMap tableMapInfoMap;
 	{
-		Record* record = NULL;
+		stats::Record* record = NULL;
 		if (uriParam.isRealTime) {
 			record = record()->get_realTimeRecord();
 		} else {
@@ -561,8 +657,10 @@ void HttpResponse::response_toptablesMap(Http& http)
 
 		//从sqlInfoMap中抽取信息
 		StringBuf tmpBuf;
-		Record::SqlInfoMap& sqlInfoMap = record->sqlInfoMap;
-		Record::SqlInfoMap::iterator it = sqlInfoMap.begin();
+
+		record->sqlInfoMapMutex.lock();
+		stats::SqlInfoMap& sqlInfoMap = record->sqlInfoMap;
+		stats::SqlInfoMap::iterator it = sqlInfoMap.begin();
 		for (; it != sqlInfoMap.end(); ++it) {
 
 			if (it->second.is_show() == false)
@@ -595,15 +693,16 @@ void HttpResponse::response_toptablesMap(Http& http)
 			tableMapInfoMap[key].part.exec += it->second.part.exec;
 			tableMapInfoMap[key].sqlHashCode.insert(it->first);
 		}
+		record->sqlInfoMapMutex.unlock();
 	}
 
 	TableTitleInfoVec ttiv;
 	ttiv.push_back(tti);
 
 	//2. sort
-	std::vector<Record::TableMapInfo*> tableMapInfoVec;
+	std::vector<stats::TableMapInfo*> tableMapInfoVec;
 
-	this->change_map2vecSort<std::vector<Record::TableMapInfo*>, Record::TableMapInfoMap, Record::TableMapInfoMap::iterator>
+	this->change_map2vecSort<std::vector<stats::TableMapInfo*>, stats::TableMapInfoMap, stats::TableMapInfoMap::iterator>
 	(ttiv, uriParam, tableMapInfoVec, tableMapInfoMap);
 
 	//3. generate table header
@@ -615,7 +714,7 @@ void HttpResponse::response_toptablesMap(Http& http)
 	unsigned int endIndex = (uriParam.currentPage) * httpServerConfig.pageSize;
 	endIndex = endIndex > tableMapInfoVec.size() ? tableMapInfoVec.size() : endIndex;
 	for (unsigned int i = startIndex; i < endIndex; ++i) {
-		Record::TableMapInfo* it = tableMapInfoVec[i];
+		stats::TableMapInfo* it = tableMapInfoVec[i];
 		http.outputBuf.append("<tr>");
 		http.outputBuf.appendFormat("<td>%s</td>", it->tablesName.c_str());
 		http.outputBuf.appendFormat("<td>%lld</td>", it->part.exec);
@@ -629,8 +728,9 @@ void HttpResponse::response_toptablesMap(Http& http)
 			tmpBuf.appendFormat("<a href='findsql?sqlhashcode=%u'>%u</a>", (*sit), (*sit));
 		}
 		tmpBuf.appendFormat("%c", '\0');
+		std::string tmpBufStr = std::string(tmpBuf.addr(), tmpBuf.get_length());
 
-		http.outputBuf.appendFormat("<td>%s</td>", tmpBuf.addr());
+		http.outputBuf.appendFormat("<td>%s</td>", tmpBufStr.c_str());
 		http.outputBuf.append("</tr>");
 	}
 	http.outputBuf.append("</table>");
@@ -640,8 +740,8 @@ void HttpResponse::response_topTrans(Http& http)
 {
 	UriParam uriParam;
 
-#define asc(field) order_func(u_uint64, Record::TransInfoPart, field, true)
-#define desc(field) order_func(u_uint64, Record::TransInfoPart, field, false)
+#define asc(field) order_func(u_uint64, stats::TransInfoPart, field, true)
+#define desc(field) order_func(u_uint64, stats::TransInfoPart, field, false)
 #define order_field(field)  asc(field), desc(field)
 	static TableTitleInfo tti[] = {
 		init_tableTitle("Trans</br>HashCode", "the hash code of translation"),
@@ -666,19 +766,19 @@ void HttpResponse::response_topTrans(Http& http)
 
 	//1. parse uri param
 	this->parse_uriParam(http, uriParam);
-	Record* record = NULL;
+	stats::Record* record = NULL;
 	if (uriParam.isRealTime) {
 		record = record()->get_realTimeRecord();
 	} else {
 		record = record();
 	}
 
-
 	//2. sort
-	std::vector<Record::TransInfo*> transInfoVec;
-	this->change_map2vecSort<std::vector<Record::TransInfo*>, Record::TransInfoMap, Record::TransInfoMap::iterator>
+	std::vector<stats::TransInfo*> transInfoVec;
+	record->transInfoMapMutex.lock();
+	this->change_map2vecSort<std::vector<stats::TransInfo*>, stats::TransInfoMap, stats::TransInfoMap::iterator>
 	(ttiv, uriParam, transInfoVec, record->transInfoMap);
-
+	record->transInfoMapMutex.unlock();
 
 	//3. generate table header
 	this->gen_tableTitle(ttiv, uriParam, "Top Trans", transInfoVec.size(), http);
@@ -693,7 +793,7 @@ void HttpResponse::response_topTrans(Http& http)
 	endIndex = endIndex > transInfoVec.size() ? transInfoVec.size() : endIndex;
 
 	for (unsigned int i = startIndex; i < endIndex; ++i) {
-		Record::TransInfo* it = transInfoVec[i];
+		stats::TransInfo* it = transInfoVec[i];
 
 		http.outputBuf.append("<tr>");
 
@@ -701,7 +801,7 @@ void HttpResponse::response_topTrans(Http& http)
 		std::set<unsigned int>::iterator its = it->sqlHashCode.begin();
 		for (; its != it->sqlHashCode.end(); ++its) {
 			sqlHashCode.appendFormat("<a href='findsql?sqlhashcode=%u'>%u;</a>", *its, *its);
-			Record::SqlInfo* si = record->find_sqlInfo(*its);
+			stats::SqlInfo* si = record->find_sqlInfo(*its);
 			if (si != NULL) {
 				sqlText.appendFormat("%s;", si->sqlText.c_str());
 			}
@@ -709,8 +809,10 @@ void HttpResponse::response_topTrans(Http& http)
 
 		http.outputBuf.appendFormat("<td><a href='findsql?transhashcode=%u'>%u</a></td>",
 				it->part.transHashCode, it->part.transHashCode);
-		http.outputBuf.appendFormat("<td>%s</td>", sqlHashCode.addr());
-		http.outputBuf.appendFormat("<td>%s</td>", Tool::format_string(sqlText.addr(), 64));
+		std::string tshc = std::string(sqlHashCode.addr(), sqlHashCode.get_length());
+		http.outputBuf.appendFormat("<td>%s</td>", tshc.c_str());
+		std::string tst = Tool::format_string(sqlText.addr(), sqlText.get_length(), 64);
+		http.outputBuf.appendFormat("<td>%s</td>", tst.c_str());
 		http.outputBuf.appendFormat("<td>%lld</td>", it->part.exec);
 		http.outputBuf.appendFormat("<td>%.2f</td>", (it->part.totalTime * 1.0)/1000.0);
 		http.outputBuf.appendFormat("<td>%lld</td>", it->part.rollbackTimes);
@@ -744,83 +846,104 @@ void HttpResponse::response_findsql(Http& http)
 	http.outputBuf.append("<th>Value</td>");
 	http.outputBuf.append("</tr>");
 
-	Record* record = NULL;
+	stats::Record* record = NULL;
 	if (uriParam.isRealTime) {
 		record = record()->get_realTimeRecord();
 	} else {
 		record = record();
 	}
 
-	Record::TransInfoMap::iterator tit = record->transInfoMap.find(uriParam.transhashcode);
-	Record::SqlInfoMap::iterator it = record->sqlInfoMap.find(uriParam.sqlhashcode);
-	if (uriParam.sqlhashcode != 0 && it != record->sqlInfoMap.end())
-	{
-		http.outputBuf.append("<tr>");
-		http.outputBuf.append("<td width='10%%'>Hashcode</td>");
-		http.outputBuf.appendFormat("<td>%u</td>", it->second.part.hashCode);
-		http.outputBuf.append("</tr>");
+	bool hasOutputData = false;
+	if (uriParam.sqlhashcode != 0) {
+		record->sqlInfoMapMutex.lock();
+		stats::SqlInfoMap::iterator it = record->sqlInfoMap.find(uriParam.sqlhashcode);
+		if (it != record->sqlInfoMap.end()) {
+			http.outputBuf.append("<tr>");
+			http.outputBuf.append("<td width='10%%'>Hashcode</td>");
+			http.outputBuf.appendFormat("<td>%u</td>", it->second.part.hashCode);
+			http.outputBuf.append("</tr>");
 
-		http.outputBuf.append("<tr>");
-		http.outputBuf.append("<td width='10%%'>SQL Text</td>");
-		http.outputBuf.appendFormat("<td>%s</td>", it->second.sqlText.c_str());
-		http.outputBuf.append("</tr>");
+			http.outputBuf.append("<tr>");
+			http.outputBuf.append("<td width='10%%'>SQL Text</td>");
+			http.outputBuf.appendFormat("<td>%s</td>", it->second.sqlText.c_str());
+			http.outputBuf.append("</tr>");
 
-		http.outputBuf.append("<tr>");
-		http.outputBuf.append("<td width='10%%'>Exec</td>");
-		http.outputBuf.appendFormat("<td>%lld</td>", it->second.part.exec);
-		http.outputBuf.append("</tr>");
+			http.outputBuf.append("<tr>");
+			http.outputBuf.append("<td width='10%%'>Exec</td>");
+			http.outputBuf.appendFormat("<td>%lld</td>", it->second.part.exec);
+			http.outputBuf.append("</tr>");
 
 
-		http.outputBuf.append("<tr>");
-		http.outputBuf.append("<td width='10%%'>Total Time</td>");
-		http.outputBuf.appendFormat("<td>%.2f</td>", (it->second.part.execTime*1.0)/1000.0);
-		http.outputBuf.append("</tr>");
+			http.outputBuf.append("<tr>");
+			http.outputBuf.append("<td width='10%%'>Total Time</td>");
+			http.outputBuf.appendFormat("<td>%.2f</td>", (it->second.part.execTime*1.0)/1000.0);
+			http.outputBuf.append("</tr>");
 
-		http.outputBuf.append("<tr>");
-		http.outputBuf.append("<td width='10%%'>Rows</td>");
-		http.outputBuf.appendFormat("<td>%lld</td>", it->second.part.totalRow);
-		http.outputBuf.append("</tr>");
+			http.outputBuf.append("<tr>");
+			http.outputBuf.append("<td width='10%%'>Rows</td>");
+			http.outputBuf.appendFormat("<td>%lld</td>", it->second.part.totalRow);
+			http.outputBuf.append("</tr>");
 
-		http.outputBuf.append("<tr>");
-		http.outputBuf.append("<td width='10%%'>TableNum</td>");
-		http.outputBuf.appendFormat("<td>%lld</td>", it->second.part.tabs);
-		http.outputBuf.append("</tr>");
+			http.outputBuf.append("<tr>");
+			http.outputBuf.append("<td width='10%%'>TableNum</td>");
+			http.outputBuf.appendFormat("<td>%lld</td>", it->second.part.tabs);
+			http.outputBuf.append("</tr>");
 
-		http.outputBuf.append("<tr>");
-		http.outputBuf.append("<td width='10%%'>ClientNum</td>");
-		http.outputBuf.appendFormat("<td>%lld</td>", it->second.clientSet.size());
-		http.outputBuf.append("</tr>");
-	} else if (uriParam.transhashcode != 0 && tit != record->transInfoMap.end()){
-
-		http.outputBuf.append("<tr>");
-		http.outputBuf.append("<td width='10%%'>Hashcode</td>");
-		http.outputBuf.appendFormat("<td>%u</td>", tit->second.part.transHashCode);
-		http.outputBuf.append("</tr>");
-
-		StringBuf sqlHashCode, sqlText;
-		std::set<unsigned int>::iterator sit =  tit->second.sqlHashCode.begin();
-		for (; sit != tit->second.sqlHashCode.end(); ++sit) {
-			sqlHashCode.appendFormat("<a href='findsql?sqlhashcode=%u'>%u;</a>", *sit, *sit);
-			Record::SqlInfo* si = record->find_sqlInfo(*sit);
-			if (si != NULL) {
-				sqlText.appendFormat("%s;", si->sqlText.c_str());
-			}
+			http.outputBuf.append("<tr>");
+			http.outputBuf.append("<td width='10%%'>ClientNum</td>");
+			http.outputBuf.appendFormat("<td>%lld</td>", it->second.clientSet.size());
+			http.outputBuf.append("</tr>");
+			hasOutputData = true;
 		}
+		record->sqlInfoMapMutex.unlock();
+	}
 
-		http.outputBuf.append("<tr>");
-		http.outputBuf.append("<td width='10%%'>SQL HashCodes</td>");
-		http.outputBuf.appendFormat("<td>%s</td>", sqlHashCode.addr());
-		http.outputBuf.append("</tr>");
+	if (uriParam.transhashcode != 0) {
+		record->transInfoMapMutex.lock();
+		stats::TransInfoMap::iterator tit = record->transInfoMap.find(uriParam.transhashcode);
+		if (tit != record->transInfoMap.end()) {
+			http.outputBuf.append("<tr>");
+			http.outputBuf.append("<td width='10%%'>Hashcode</td>");
+			http.outputBuf.appendFormat("<td>%u</td>", tit->second.part.transHashCode);
+			http.outputBuf.append("</tr>");
+
+			StringBuf sqlHashCode, sqlText;
+			std::set<unsigned int>::iterator sit =  tit->second.sqlHashCode.begin();
+			for (; sit != tit->second.sqlHashCode.end(); ++sit) {
+				sqlHashCode.appendFormat("<a href='findsql?sqlhashcode=%u'>%u;</a>", *sit, *sit);
+				stats::SqlInfo* si = record->find_sqlInfo(*sit);
+				if (si != NULL) {
+					sqlText.appendFormat("%s;", si->sqlText.c_str());
+				}
+			}
+
+			std::string tmpshc = std::string(sqlHashCode.addr(), sqlHashCode.get_length());
+			std::string tmpst = std::string(sqlText.addr(), sqlText.get_length());
+
+			http.outputBuf.append("<tr>");
+			http.outputBuf.append("<td width='10%%'>SQL HashCodes</td>");
+			http.outputBuf.appendFormat("<td>%s</td>", tmpshc.c_str());
+			http.outputBuf.append("</tr>");
 
 
-		http.outputBuf.append("<tr>");
-		http.outputBuf.append("<td width='10%%'>SQL Texts</td>");
-		http.outputBuf.appendFormat("<td>%s</td>", sqlText.addr());
-		http.outputBuf.append("</tr>");
-	} else {
+			http.outputBuf.append("<tr>");
+			http.outputBuf.append("<td width='10%%'>SQL Texts</td>");
+			http.outputBuf.appendFormat("<td>%s</td>", tmpst.c_str());
+			http.outputBuf.append("</tr>");
+			hasOutputData = true;
+
+		}
+		record->transInfoMapMutex.unlock();
+	}
+
+	if ((uriParam.sqlhashcode || uriParam.transhashcode) && !hasOutputData) {
 		http.outputBuf.append("<tr>");
 		http.outputBuf.append("<td width='10%%'>Hashcode</td>");
-		http.outputBuf.appendFormat("<td>%u</td>", uriParam.sqlhashcode);
+		if(uriParam.sqlhashcode) {
+			http.outputBuf.appendFormat("<td>%u</td>", uriParam.sqlhashcode);
+		} else {
+			http.outputBuf.appendFormat("<td>%u</td>", uriParam.transhashcode);
+		}
 		http.outputBuf.append("</tr>");
 
 		http.outputBuf.append("<tr>");
@@ -828,6 +951,7 @@ void HttpResponse::response_findsql(Http& http)
 		http.outputBuf.append("<td></td>");
 		http.outputBuf.append("</tr>");
 	}
+
 	http.outputBuf.append("</table>");
 }
 
@@ -843,19 +967,14 @@ void HttpResponse::response_home(Http& http)
 #endif
 
 	if (httpServerConfig.show_topsqls) {
-		http.outputBuf.appendFormat("<span align='center'>(Sql List, Top by Exec)</span>");
-		http.set_uriParam("fd", "Exec");
 		this->response_topsqls(http);
 	}
 
 	if (httpServerConfig.show_clients) {
-		http.outputBuf.appendFormat("<span align='center'>(Client List, Top by Query)</span>");
-		http.set_uriParam("fd", "Query");
 		this->response_topclients(http);
 	}
 
 	if (httpServerConfig.show_taskThread) {
-		http.outputBuf.appendFormat("<span align='center'>(TaskThread List)</span>");
 		this->response_taskThread(http);
 	}
 }
@@ -1016,15 +1135,23 @@ void HttpResponse::response_reset(Http& http)
 
 void HttpResponse::response_task(Http& http)
 {
-	http.outputBuf.append("<table border='0' class='data' width='98%%'>");
-	http.outputBuf.append("<caption>task Information</caption>");
-	http.outputBuf.append("<tr>");
-	http.outputBuf.append("<th>all task</th>");
-	http.outputBuf.append("<th>current task</th>");
-	http.outputBuf.append("<th>doing task</th>");
-	http.outputBuf.append("<th>wait task</th>");
-	http.outputBuf.append("<th>close task</th>");
-	http.outputBuf.append("</tr>");
+	UriParam uriParam;
+	static TableTitleInfo tti[] = {
+		init_tableTitle("All</br>Task", ""),
+		init_tableTitle("Current</br>Task", ""),
+		init_tableTitle("Doing</br>Task", ""),
+		init_tableTitle("Wait</br>Task", ""),
+		init_tableTitle("Close</br>Task", ""),
+		init_tableTitle_NULL()
+	};
+
+	TableTitleInfoVec ttiv;
+	ttiv.push_back(tti);
+
+	//1. parse uri param
+	this->parse_uriParam(http, uriParam);
+	this->gen_tableTitle(ttiv, uriParam, "Task Information", 1, http);
+
 	http.outputBuf.append("<tr>");
 	http.outputBuf.appendFormat("<td>%lld</td>", record()->sum_clientConn);
 	http.outputBuf.appendFormat("<td>%lld</td>", record()->sum_currentClientConn);
@@ -1033,22 +1160,32 @@ void HttpResponse::response_task(Http& http)
 	http.outputBuf.appendFormat("<td>%lld</td>", record()->sum_closeClientConn);
 	http.outputBuf.append("</tr>");
 	http.outputBuf.append("</table>");
+
+	this->response_taskThread(http);
+
 }
 
 void HttpResponse::response_taskThread(Http& http)
 {
-	http.outputBuf.append("<table border='0' class='data' width='98%%'>");
-	if (this->httpServerConfig.current_page_home == false)
-		http.outputBuf.append("<caption>task thread Information</caption>");
-	http.outputBuf.append("<tr>");
-	http.outputBuf.append("<th>thread id</th>");
-	http.outputBuf.append("<th>thread all task</th>");
-	http.outputBuf.append("<th>thread doing task</th>");
-	http.outputBuf.append("<th>thread fail task</th>");
-	http.outputBuf.append("<th>thread finished task</th>");
-	http.outputBuf.append("</tr>");
+	UriParam uriParam;
+	static TableTitleInfo tti[] = {
+		init_tableTitle("Thread</br>Id", ""),
+		init_tableTitle("All</br>Task", ""),
+		init_tableTitle("Doing</br>Task", ""),
+		init_tableTitle("Fail</br>Task", ""),
+		init_tableTitle("Finished</br>Task", ""),
+		init_tableTitle_NULL()
+	};
 
-	Record::ThreadInfoMap::iterator it = record()->threadInfoMap.begin();
+	TableTitleInfoVec ttiv;
+	ttiv.push_back(tti);
+
+	//1. parse uri param
+	this->parse_uriParam(http, uriParam);
+	this->gen_tableTitle(ttiv, uriParam, "WorkThread Information", record()->threadInfoMap.size(), http);
+
+	record()->threadInfoMapMutex.lock();
+	stats::ThreadInfoMap::iterator it = record()->threadInfoMap.begin();
 	for (; it != record()->threadInfoMap.end(); ++it) {
 		if (it->second.is_show() == false)
 			continue;
@@ -1060,20 +1197,29 @@ void HttpResponse::response_taskThread(Http& http)
 		http.outputBuf.appendFormat("<td>%lld</td>", it->second.sum_finishedClientConn);
 		http.outputBuf.append("</tr>");
 	}
+	record()->threadInfoMapMutex.unlock();
 	http.outputBuf.append("</table>");
 }
 
 void HttpResponse::response_lock(Http& http)
 {
-	http.outputBuf.append("<table border='0' class='data' width='98%%'>");
-	http.outputBuf.append("<caption>Lock Information</caption>");
-	http.outputBuf.append("<tr>");
-	http.outputBuf.append("<th>lock name</th>");
-	http.outputBuf.append("<th>lock num</th>");
-	http.outputBuf.append("<th>unlock num</th>");
-	http.outputBuf.append("</tr>");
+	UriParam uriParam;
+	static TableTitleInfo tti[] = {
+		init_tableTitle("Lock</br>Name", ""),
+		init_tableTitle("Lock</br>Num", ""),
+		init_tableTitle("Unlock</br>Num", ""),
+		init_tableTitle_NULL()
+	};
 
-	Record::RecordMutexMap::iterator it =  record()->recordMutexMap.begin();
+	TableTitleInfoVec ttiv;
+	ttiv.push_back(tti);
+
+	//1. parse uri param
+	this->parse_uriParam(http, uriParam);
+	this->gen_tableTitle(ttiv, uriParam, "Lock Information", record()->recordMutexMap.size(), http);
+
+	record()->recordMutexMapMutex.lock();
+	stats::RecordMutexMap::iterator it =  record()->recordMutexMap.begin();
 	for (; it != record()->recordMutexMap.end(); ++it) {
 		if (it->second.is_show() == false)
 			continue;
@@ -1084,19 +1230,27 @@ void HttpResponse::response_lock(Http& http)
 		http.outputBuf.appendFormat("<td>%lld</td>", it->second.unlockNum);
 		http.outputBuf.append("</tr>");
 	}
+	record()->recordMutexMapMutex.unlock();
 	http.outputBuf.append("</table>");
 }
 
 void HttpResponse::response_htmlPage(Http& http)
 {
-	http.outputBuf.append("<table border='0' class='data' width='98%%'>");
-	http.outputBuf.append("<caption>Html Page</caption>");
-	http.outputBuf.append("<tr>");
-	http.outputBuf.append("<th>Base Url</th>");
-	http.outputBuf.append("<th>Request Num</th>");
-	http.outputBuf.append("</tr>");
+	UriParam uriParam;
+	static TableTitleInfo tti[] = {
+		init_tableTitle("Base</br>Url", ""),
+		init_tableTitle("Request</br>Num", ""),
+		init_tableTitle_NULL()
+	};
 
-	Record::RequestPageCountMap::iterator it =  record()->httpRequestPageCount.begin();
+	TableTitleInfoVec ttiv;
+	ttiv.push_back(tti);
+
+	//1. parse uri param
+	this->parse_uriParam(http, uriParam);
+	this->gen_tableTitle(ttiv, uriParam, "Html Page", record()->httpRequestPageCount.size(), http);
+
+	stats::RequestPageCountMap::iterator it =  record()->httpRequestPageCount.begin();
 	for (; it != record()->httpRequestPageCount.end(); ++it) {
 		http.outputBuf.append("<tr>");
 		http.outputBuf.appendFormat("<td>%s</td>", it->first.c_str());
@@ -1104,6 +1258,97 @@ void HttpResponse::response_htmlPage(Http& http)
 		http.outputBuf.append("</tr>");
 	}
 	http.outputBuf.append("</table>");
+}
+
+void HttpResponse::response_dataBase(Http& http)
+{
+	UriParam uriParam;
+
+	static TableTitleInfo tti[] = {
+		init_tableTitle("Label</br>Name", "the database's label name"),
+		init_tableTitle("Address", "the database's address"),
+		init_tableTitle("Port", "the database's port"),
+		init_tableTitle("Weight</br>Value", ""),
+		init_tableTitle("Connect</br>Num", "The number of connect to database"),
+		init_tableTitle("IsActive", "the database is active or not"),
+		init_tableTitle_NULL()
+	};
+
+	TableTitleInfoVec ttiv;
+	ttiv.push_back(tti);
+	unsigned int size = config()->get_databaseSize();
+	uriParam.currentPage = 1;
+
+	//3. generate table header
+	this->gen_tableTitle(ttiv, uriParam, "Database info", size, http);
+
+	for (unsigned int i = 0; i < size; ++i) {
+		DataBase* db = config()->get_database(i);
+		http.outputBuf.append("<tr>");
+		http.outputBuf.appendFormat("<td>%s</td>", db->get_labelName().c_str());
+		http.outputBuf.appendFormat("<td>%s</td>", db->get_addr().c_str());
+		http.outputBuf.appendFormat("<td>%lld</td>", db->get_port());
+		http.outputBuf.appendFormat("<td>%lld</td>", db->get_weightValue());
+		http.outputBuf.appendFormat("<td>%lld</td>", db->get_connectNum());
+		if (db->get_isActive()) {
+			http.outputBuf.appendFormat("<td>true</td>");
+		} else {
+			http.outputBuf.appendFormat("<td>false</td>");
+		}
+		http.outputBuf.append("</tr>");
+	}
+
+	http.outputBuf.append("</table>");
+
+
+	//database group information
+	static TableTitleInfo ttig[] = {
+		init_tableTitle("Label</br>Name", "The database group's label name"),
+		init_tableTitle("Master</br>Group", "The master database group"),
+		init_tableTitle("Slave</br>Group", "The slave database group"),
+		init_tableTitle("Class</br>Name", "The handle protocol class name"),
+		init_tableTitle("Front</br>Port", "The group handle the connect that accept from the front port; when it is zero, the group handle all user connects"),
+		init_tableTitle("Password</br>Separate", "Use password separate or not"),
+		init_tableTitle("Read</br>Slave", "Use read slave or not"),
+		init_tableTitle("Use</br>ConnectionPool", "Use connection pool or not"),
+		init_tableTitle_NULL()
+	};
+	ttiv.clear();
+	ttiv.push_back(ttig);
+	size = config()->get_dataBaseGroupSize();
+	uriParam.currentPage = 1;
+	this->gen_tableTitle(ttiv, uriParam, "DatabaseGroup info", size, http);
+
+	for (unsigned int i = 0; i < size; ++i) {
+		DataBaseGroup* dbg = config()->get_dataBaseGroup(i);
+		http.outputBuf.append("<tr>");
+		http.outputBuf.appendFormat("<td>%s</td>", dbg->get_labelName().c_str());
+		http.outputBuf.appendFormat("<td>%s</td>", dbg->get_dbMasterGroup().c_str());
+		http.outputBuf.appendFormat("<td>%s</td>", dbg->get_dbSlaveGroup().c_str());
+		http.outputBuf.appendFormat("<td>%s</td>", dbg->get_className().c_str());
+		http.outputBuf.appendFormat("<td>%u</td>", dbg->get_frontPort());
+		if (dbg->get_passwordSeparate()) {
+			http.outputBuf.appendFormat("<td>true</td>");
+		} else {
+			http.outputBuf.appendFormat("<td>false</td>");
+		}
+
+		if (dbg->get_readSlave()) {
+			http.outputBuf.appendFormat("<td>true</td>");
+		} else {
+			http.outputBuf.appendFormat("<td>false</td>");
+		}
+		if (dbg->get_useConnectionPool()) {
+			http.outputBuf.appendFormat("<td>true</td>");
+		} else {
+			http.outputBuf.appendFormat("<td>false</td>");
+		}
+
+		http.outputBuf.append("</tr>");
+	}
+
+	http.outputBuf.append("</table>");
+
 }
 
 void HttpResponse::parse_uriParam(Http& http, UriParam& uriParam)
@@ -1117,6 +1362,7 @@ void HttpResponse::parse_uriParam(Http& http, UriParam& uriParam)
 	std::string sqlType = http.get_uriParam("sqltype");
 	std::string transhashcode = http.get_uriParam("transhashcode");
 	std::string realTime = http.get_uriParam("realtime");
+	std::string clientuserappinfohashcode = http.get_uriParam("clientuserappinfohashcode");
 
 	if (orderBy.compare("1") == 0) {
 		uriParam.orderBy = 1;
@@ -1139,6 +1385,7 @@ void HttpResponse::parse_uriParam(Http& http, UriParam& uriParam)
 	uriParam.clientHashCode = (unsigned int)strtoul(clientHashCode.c_str(), NULL, 10);
 	uriParam.sqlhashcode = (unsigned int)strtoul(sqlHashCode.c_str(), NULL, 10);
 	uriParam.transhashcode = (unsigned int)strtoul(transhashcode.c_str(), NULL, 10);
+	uriParam.clientuserappinfohashcode = (unsigned int)strtoul(clientuserappinfohashcode.c_str(), NULL, 10);
 
 	if (sqlType.size() < 0) {
 		uriParam.sqltype = -1;
@@ -1259,24 +1506,24 @@ void HttpResponse::gen_tableTitle(const TableTitleInfoVec& titleInfo, UriParam& 
 					baseUri.c_str(), uriParam.orderField.c_str(), uriParam.orderBy, uriParam.currentPage - 1);
 		}
 
-		if (this->httpServerConfig.current_page_home == false) {
-			http.outputBuf.append("(");
-			http.outputBuf.appendFormat("Since %s", SystemApi::system_timeStr().c_str());
-			http.outputBuf.appendFormat(" %s,", caption);
-			if (uriParam.orderField.length() > 0)
-				http.outputBuf.appendFormat(" Order By %s,", uriParam.orderField.c_str());
-			if (totalItem > 0) {
-				http.outputBuf.appendFormat(" Total: %d rows", totalItem);
-			}
-			http.outputBuf.append(")");
-
-			//calc sum page
-			unsigned int tpage = totalItem / httpServerConfig.pageSize;
-			unsigned int totalPage = totalItem % httpServerConfig.pageSize == 0 ? tpage : tpage + 1;
-			if (totalPage > uriParam.currentPage)
-				http.outputBuf.appendFormat("<a href='%sfd=%s&orderby=%d&page=%d'>Next</a>",
-						baseUri.c_str(), uriParam.orderField.c_str(), uriParam.orderBy, uriParam.currentPage + 1);
+//		if (this->httpServerConfig.current_page_home == false) {
+		http.outputBuf.append("(");
+		http.outputBuf.appendFormat("Since %s", SystemApi::system_timeStr().c_str());
+		http.outputBuf.appendFormat(" %s,", caption);
+		if (uriParam.orderField.length() > 0)
+			http.outputBuf.appendFormat(" Order By %s,", uriParam.orderField.c_str());
+		if (totalItem > 0) {
+			http.outputBuf.appendFormat(" Total: %d rows", totalItem);
 		}
+		http.outputBuf.append(")");
+
+		//calc sum page
+		unsigned int tpage = totalItem / httpServerConfig.pageSize;
+		unsigned int totalPage = totalItem % httpServerConfig.pageSize == 0 ? tpage : tpage + 1;
+		if (totalPage > uriParam.currentPage)
+			http.outputBuf.appendFormat("<a href='%sfd=%s&orderby=%d&page=%d'>Next</a>",
+					baseUri.c_str(), uriParam.orderField.c_str(), uriParam.orderBy, uriParam.currentPage + 1);
+//		}
 		http.outputBuf.append("</caption>");
 
 	}
@@ -1293,7 +1540,7 @@ void HttpResponse::gen_tableTitle(const TableTitleInfoVec& titleInfo, UriParam& 
 			} else {
 				http.outputBuf.append("<th>");
 			}
-			if (tti[i].ascFunc == NULL) {
+			if (tti[i].ascFunc == NULL || this->httpServerConfig.current_page_home == true) {
 				http.outputBuf.appendFormat("<span title='%s'>%s</span>",tti[i].hint.c_str(), tti[i].name.c_str());
 			} else {
 				if ((uriParam.orderField.size() > 0) && (tti[i].href.compare(uriParam.orderField) == 0)) {
@@ -1333,8 +1580,9 @@ void HttpResponse::change_map2vecSort(const TableTitleInfoVec& ttiVec, const Uri
 {
 	mapIterType it = mapobject.begin();
 	for (; it != mapobject.end(); ++it) {
-		if (it->second.is_show() == false)
+		if (it->second.is_show() == false) {
 			continue;
+		}
 		vec.push_back(&it->second);
 	}
 

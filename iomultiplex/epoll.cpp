@@ -29,8 +29,7 @@
 #include "epoll.h"
 
 Epoll::Epoll(std::string name)
-	:IoEvent(name),
-	mutexLock("_lock", NULL)
+	:IoEvent(name)
 {
 #ifndef WIN32
 	epfd = epoll_create(256);//the max handles
@@ -126,13 +125,19 @@ bool Epoll::is_writeEvent(unsigned int event)
 
 void Epoll::del_ioEvent(unsigned int fd)
 {
+	mutexLock.lock();
+	if (!this->is_regesterEvent(fd)) {
+		mutexLock.unlock();
+		return;
+	}
+	mutexLock.unlock();
 	logs(Logger::DEBUG, "delete fd(%d) epoll event", fd);
 	//1. delete from epoll
 #ifdef linux
 	struct epoll_event ev;
 	ev.data.fd = fd;
 	if (epoll_ctl(this->epfd, EPOLL_CTL_DEL, fd, &ev)) {
-		logs(Logger::ERR, "del fd(%d) error", fd);
+		logs(Logger::ERR, "del fd(%d) error, errmsg(%s)", fd, strerror(errno));
 	}
 #endif
 	//2. delete from eventMap

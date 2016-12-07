@@ -25,28 +25,19 @@
 * @Date: 2016年8月5日
 *
 */
-#include "record.h"
+
 #include "mutexlock.h"
 
 #include <sys/time.h>
 
 MutexLock::MutexLock()
 {
-	this->record = NULL;
 	initMutex();
 }
 
 MutexLock::MutexLock(std::string name)
 {
 	this->mutexName = name;
-	this->record = NULL;
-	initMutex();
-}
-
-MutexLock::MutexLock(std::string name, Record *record)
-{
-	this->mutexName = name;
-	this->record = record;
 	initMutex();
 }
 
@@ -69,10 +60,6 @@ void MutexLock::lock()
 #else
 	pthread_mutex_lock(&this->mutex);
 #endif
-
-	if (this->record) {
-		record->record_lock(this);
-	}
 }
 
 void MutexLock::unlock()
@@ -82,9 +69,6 @@ void MutexLock::unlock()
 #else
 	pthread_mutex_unlock(&this->mutex);
 #endif
-
-	if (this->record)
-		this->record->record_unlock(this);
 }
 
 void MutexLock::set_name(std::string name)
@@ -129,9 +113,4 @@ void MutexLock::signal_mutexCond()
 #else
 	pthread_cond_signal(&this->mutexCond);
 #endif
-}
-
-void MutexLock::set_record(Record* record)
-{
-	this->record = record;
 }

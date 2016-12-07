@@ -319,7 +319,7 @@ int NetworkSocket::read_data()
 
 	if (dataLen == ((unsigned int)0)) {
 		logs(Logger::INFO, "the socket(%d) is closed", this->m_fd);
-		return -1;
+		return 2;
 	}
 
 	this->m_recvData.reallocMem(this->m_recvData.get_length() + dataLen);
@@ -381,9 +381,16 @@ int NetworkSocket::write_data(StringBuf& buf)
 		len = send(this->m_fd, (char*)(buf.addr() + buf.get_offset()), buf.get_remailLength(), 0);
 		if (len < 0) {
 			errno = SystemApi::system_errno();
+
+#ifdef _WIN32
+			if (errno == WSAEWOULDBLOCK) {
+				return 1;//retry;
+			}
+#else
 			if (errno == EAGAIN) {
 				return 1;//retry
 			}
+#endif
 			logs(Logger::ERR, "send data error, fd(%d), errno: %d, err(%s)",
 					this->m_fd, errno, SystemApi::system_strerror(errno));
 			return -1;
@@ -395,6 +402,9 @@ int NetworkSocket::write_data(StringBuf& buf)
 
 void NetworkSocket::save_data(StringBuf& buf)
 {
+	//first free some memory and then copy data to sendData
+	this->m_sendData.erase(0, this->m_sendData.get_offset());
+	this->m_sendData.set_offset(0);
 	this->m_sendData.append((char*)(buf.addr() + buf.get_offset()), buf.get_remailLength());
 }
 
@@ -406,5 +416,24 @@ void NetworkSocket::closeSocket(unsigned int fd)
 void NetworkSocket::clear_dataBuf()
 {
 	this->m_recvData.clear();
+	this->clear_sendData();
+}
+
+void NetworkSocket::clear_sendData()
+{
 	this->m_sendData.clear();
+}
+
+void NetworkSocket::inc_dataBaseConnect()
+{
+	if (this->m_dataBase != NULL) {
+		this->m_dataBase->set_connectNum(this->m_dataBase->get_connectNum() + 1);
+	}
+}
+
+void NetworkSocket::dec_dataBaseConnect()
+{
+	if (this->m_dataBase != NULL) {
+		this->m_dataBase->set_connectNum(this->m_dataBase->get_connectNum() - 1);
+	}
 }

@@ -102,6 +102,7 @@ public:
 
 	void add_ioEventInfo(unsigned int fd, EventInfo& event, int& is_new);
 	void del_ioEventInfo(unsigned int fd);
+	bool is_regesterEvent(unsigned int fd);
 	const EventInfo* get_IoEventInfo(unsigned int fd);
 	unsigned int get_ioEventInfoSize();
 	const IoEvent::IoEventMapType& get_eventMap();

@@ -125,7 +125,9 @@ int DataBaseGroup::set_dataBaseGroupVec(std::vector<DataBase>& dbVec,
 	}
 	return 0;
 }
-
+void Config::update_globalSecondTime() {
+	this->m_globalSecondTime = SystemApi::system_millisecond() / 1000;
+}
 Config::Config()
 {
 	//add oneproxy default config.
@@ -177,7 +179,7 @@ Config::Config()
 #undef add_dbConfig
 
 	//init global time
-	this->m_globalSecondTime = SystemApi::system_millisecond()/1000;
+	this->update_globalSecondTime();
 }
 
 void Config::add_config(std::vector<ConfigKeyValue>& db, std::string key, std::string dvalue, CVTFunc cf, SetFunc sf)

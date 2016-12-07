@@ -42,6 +42,7 @@ ProtocolHandleRetVal ProtocolBase::protocol_front(Connection& conn)
 		//2. 预处理
 		resultValue = this->prehandle_frontPacket(conn);
 		if (resultValue != HANDLE_RETURN_SUCCESS) {//可能出错或者需要直接转发
+			logs(Logger::ERR, "resultValue != HANDLE_RETURN_SUCCESS");
 			break;
 		}
 
@@ -152,14 +153,34 @@ int ProtocolBase::protocol_getBackendConnect(Connection& conn)
 	return this->protocol_createBackendConnect(conn);
 }
 
-int ProtocolBase::protocol_releaseBackendConnect(Connection& conn)
+int ProtocolBase::protocol_releaseBackendConnect(Connection& conn, ConnFinishType type)
 {
 	if (conn.database.dataBaseGroup && conn.database.dataBaseGroup->get_useConnectionPool()) {
-		if(conn.sock.masters != NULL && ConnectionPool::get_pool().set_backendConnect(conn.sock.masters)) {
-			delete conn.sock.masters;
+
+		//when has error in connection, release the server connection.
+		if (conn.status == CONN_EXEC_STATUS_ERROR) {
+			type = CONN_FINISHED_ERR;
 		}
-		if (conn.sock.slavers != NULL && ConnectionPool::get_pool().set_backendConnect(conn.sock.slavers)) {
-			delete conn.sock.slavers;
+
+		if (conn.record.type >= TRANS_QUERY_TYPE && conn.record.type < TRANS_QUERY_FINISHED_TYPE) {
+			logs(Logger::ERR, "current connection in trans error");
+			type = CONN_FINISHED_ERR;
+		}
+
+		if (type == CONN_FINISHED_ERR) {
+			if(conn.sock.masters != NULL) {
+				ConnectionPool::get_pool().release_backendSocket(conn.sock.masters);
+			}
+			if (conn.sock.slavers != NULL) {
+				ConnectionPool::get_pool().release_backendSocket(conn.sock.slavers);
+			}
+		} else {
+			if(conn.sock.masters != NULL && ConnectionPool::get_pool().set_backendConnect(conn.sock.masters)) {
+				delete conn.sock.masters;
+			}
+			if (conn.sock.slavers != NULL && ConnectionPool::get_pool().set_backendConnect(conn.sock.slavers)) {
+				delete conn.sock.slavers;
+			}
 		}
 	} else {
 		if (conn.sock.masters != NULL) {
@@ -221,6 +242,8 @@ int ProtocolBase::protocol_createBackendConnect(Connection& conn)
 						ns->get_address().c_str(), ns->get_port());
 				return -1;
 			}
+			ns->set_dataBase(conn.curdb());
+			ns->inc_dataBaseConnect();
 
 			logs(Logger::DEBUG, "Create new socket(%d)", conn.sock.curservs->get_fd());
 			if (conn.database.dataBaseGroup && conn.database.dataBaseGroup->get_useConnectionPool()) {
@@ -360,17 +383,18 @@ int ProtocolBase::parse_sql(Connection& conn, std::string sqlText)
 //统计读取到前端的数据
 void ProtocolBase::stat_readFrontData(Connection& conn)
 {
-	record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.upDataSize
-			+= conn.clins()->get_recvData().get_length();
+	record()->record_clientQuerySendSize(conn.clins()->get_addressHashCode(),
+			conn.clins()->get_recvData().get_length());
 }
 
 //统计从后端返回的数据
 void ProtocolBase::stat_readBackendData(Connection& conn)
 {
-	record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.downDataSize
-			+= conn.servns()->get_recvData().get_length();
-	record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode].part.recvSize
-			+= conn.servns()->get_recvData().get_length();
+	record()->record_clientQueryRecvSize(conn.clins()->get_addressHashCode(),
+			conn.servns()->get_recvData().get_length());
+
+	record()->record_sqlInfoRecvSize(conn.record.sqlInfo.sqlHashCode,
+			conn.servns()->get_recvData().get_length());
 }
 
 //开始事务
@@ -407,32 +431,7 @@ void ProtocolBase::stat_endTrans(Connection& conn, bool isRollBack)
 			break;
 
 		u_uint64 transHashCode = Tool::quick_hash_code(hashCodeKeys.c_str(), hashCodeKeys.length());
-		u_uint64 finishedTime = SystemApi::system_millisecond();
-
-		Record::TransInfo& info = record()->transInfoMap[transHashCode];
-		info.part.transHashCode = transHashCode;
-		info.lastTime = conn.record.trans_start_time;
-		info.part.exec ++;
-		info.part.lastTime = finishedTime - conn.record.trans_start_time;
-		if (info.part.lastTime > info.part.maxTime) {
-			info.part.maxTime = info.part.lastTime;
-		}
-		if (info.part.lastTime < info.part.minTime) {
-			info.part.minTime = info.part.lastTime;
-		}
-		info.part.sqlNum = conn.record.sqlSet.size();
-		info.part.totalTime += info.part.lastTime;
-
-		if (conn.record.rollback) {
-			info.part.rollbackTimes++;
-		}
-
-		{
-			std::set<unsigned int>::iterator it = conn.record.sqlSet.begin();
-			for(; it != conn.record.sqlSet.end(); ++it) {
-				info.sqlHashCode.insert(*it);
-			}
-		}
+		record()->record_transInfoEndTrans(transHashCode, conn);
 		conn.record.sqlSet.clear();
 	}while(0);
 	conn.record.type = QUERY_TYPE_INIT;
@@ -443,20 +442,8 @@ void ProtocolBase::stat_saveSql(Connection& conn, std::string& sqlText)
 	conn.record.sqlInfo.sqlText = sqlText;
 	conn.record.sqlInfo.sqlHashCode = Tool::quick_hash_code(sqlText.c_str(), sqlText.length());
 
-	Record::SqlInfo& sqlInfo = record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode];
-	if (sqlInfo.part.hashCode == 0) {
-		sqlInfo.part.hashCode = conn.record.sqlInfo.sqlHashCode;
-		sqlInfo.sqlText = conn.record.sqlInfo.sqlText;
-		sqlInfo.part.tabs = conn.record.sqlInfo.tableCount;
-		sqlInfo.part.type =  (Record::SqlOp)conn.record.sqlInfo.queryType;
-		record()->clientQueryMap[conn.clins()->get_addressHashCode()].add_sqlList(sqlInfo.part.hashCode);
-		sqlInfo.add_clientSet(conn.clins()->get_addressHashCode());
-
-		//set table info
-		for (unsigned int i = 0; i < sqlInfo.part.tabs; ++i) {
-			sqlInfo.add_tableSet(conn.record.sqlInfo.tableNameVec.at(i));
-		}
-	}
+	record()->record_sqlInfoAddSql(conn);
+	record()->record_clientQueryAddSql(conn);
 }
 
 //记录当前执行的sql，这个sql是经过解析器改写后的sql语句，及把值替换后的sql语句
@@ -497,25 +484,14 @@ void ProtocolBase::stat_executeSql(Connection& conn)
 	if (conn.record.sqlInfo.sqlHashCode <= 0)
 		return;
 
-	Record::SqlInfo& sqlInfo = record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode];
-	sqlInfo.part.exec++;
-
 	//record client
-	record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.queryNum++;
-	if (sqlInfo.part.type == stats::sql_op_select) {
-		record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.selectNum++;
-	} else if (sqlInfo.part.type == stats::sql_op_insert) {
-		record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.insertNum++;
-	} else if (sqlInfo.part.type == stats::sql_op_update) {
-		record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.updateNum++;
-	} else if (sqlInfo.part.type == stats::sql_op_delete) {
-		record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.deleteNum++;
-	}
+	record()->record_clientQueryExec(conn.record.sqlInfo.sqlHashCode, conn.clins()->get_addressHashCode());
 
+	record()->record_sqlInfoExec(conn.record.sqlInfo.sqlHashCode);
 	//in trans.
 	if (conn.record.type >= TRANS_QUERY_TYPE && conn.record.type < TRANS_QUERY_SUM) {
 		conn.record.sqlSet.insert(conn.record.sqlInfo.sqlHashCode);
-		record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode].part.trans++;
+		record()->record_sqlInfoExecTran(conn.record.sqlInfo.sqlHashCode);
 	}
 }
 
@@ -549,9 +525,11 @@ int ProtocolBase::stat_preparedSql(Connection& conn, unsigned int preparedHandle
 		return -1;
 	}
 
-	Record::SqlInfo& sqlInfo = record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode];
-	conn.record.sqlInfo.sqlText = sqlInfo.sqlText;
-	logs_logsql("prepare sql: %s, preparedHandle: %u", sqlInfo.sqlText.c_str(), preparedHandle);
+	stats::SqlInfo* sqlInfo = record()->find_sqlInfo(conn.record.sqlInfo.sqlHashCode);
+	if (sqlInfo != NULL) {
+		conn.record.sqlInfo.sqlText = sqlInfo->sqlText;
+		logs_logsql("prepare sql: %s, preparedHandle: %u", sqlInfo->sqlText.c_str(), preparedHandle);
+	}
 
 	this->stat_executeSql(conn);
 
@@ -568,30 +546,33 @@ void ProtocolBase::stat_recvOneRow(Connection& conn)
 //接收完成，其中rows时结束包中提供的总数据行数，如果没有，可以不用填写
 void ProtocolBase::stat_recvFinishedRow(Connection& conn, unsigned int rows)
 {
-	time_t ttime = SystemApi::system_millisecond();
-	record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode].part.execTime += ttime - conn.record.startQueryTime;
-	if ((conn.record.totalRow != rows) && (rows != 0)) {
-		record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode].part.totalRow += rows;
-	} else {
-		record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode].part.totalRow += conn.record.totalRow;
-	}
+	record()->record_sqlInfoRecvResult(conn, rows);
 	conn.record.totalRow = 0;
 }
 
 //sql语句执行错误,这个函数应该与stat_recvFinishedRow互斥
 void ProtocolBase::stat_executeErr(Connection& conn)
 {
-	time_t ttime = SystemApi::system_millisecond();
-	record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode].part.execTime += ttime - conn.record.startQueryTime;
+	record()->record_sqlInfoExecFail(conn);
+	record()->record_clientQueryExecFail(conn);
+}
 
-	record()->sqlInfoMap[conn.record.sqlInfo.sqlHashCode].part.fail++;
-	record()->clientQueryMap[conn.clins()->get_addressHashCode()].part.queryFailNum++;
-	record()->clientQueryMap[conn.clins()->get_addressHashCode()].add_failSqlList(conn.record.sqlInfo.sqlHashCode);
+void ProtocolBase::stat_login(Connection& conn)
+{
 }
 
 void ProtocolBase::add_socketToPool(NetworkSocket* ns)
 {
 	ConnectionPool::get_pool().save_backendConnect(ns,
 			&NetworkSocket::destroy_networkSocket, &ProtocolBase::check_socketActive, true);
+}
+
+std::string ProtocolBase::get_sqlText(unsigned int hashCode)
+{
+	std::string sqlText;
+	stats::SqlInfo* sqlInfo = record()->find_sqlInfo(hashCode);
+	if (sqlInfo != NULL)
+		sqlText = sqlInfo->sqlText;
+	return sqlText;
 }
 

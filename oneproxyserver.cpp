@@ -49,14 +49,12 @@ int OneproxyServer::start_server()
 
 void OneproxyServer::accept_clientRequest(NetworkSocket *clientSocket)
 {
-	clientSocket->set_addressHashCode(
-				Tool::quick_hash_code(clientSocket->get_address().c_str(), clientSocket->get_address().length()));
-	record()->clientQueryMap[clientSocket->get_addressHashCode()].part.hashCode = clientSocket->get_addressHashCode();
-	record()->clientQueryMap[clientSocket->get_addressHashCode()].part.connectNum ++;
-	record()->clientQueryMap[clientSocket->get_addressHashCode()].ipAddr = clientSocket->get_address();
-	record()->clientQueryMap[clientSocket->get_addressHashCode()].part.onLineStatus = true;
-	record()->clientQueryMap[clientSocket->get_addressHashCode()].part.start_connect_time = SystemApi::system_millisecond();
-	record()->clientQueryMap[clientSocket->get_addressHashCode()].latest_connect_time = (u_uint64)SystemApi::system_time();
+	char buf[512] = {0};
+	sprintf(buf, "%s:%d", clientSocket->get_address().c_str(), clientSocket->get_port());
+//	unsigned int clientHashCode = Tool::quick_hash_code(buf, strlen(buf));
+	unsigned int clientHashCode = Tool::quick_hash_code(clientSocket->get_address().c_str(), clientSocket->get_address().length());
+	clientSocket->set_addressHashCode(clientHashCode);
+	record()->record_clientQueryAddNewClient(clientSocket->get_addressHashCode(), clientSocket->get_address());
 	if (this->connectManager)
 		this->connectManager->add_task(clientSocket);
 

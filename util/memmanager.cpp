@@ -44,6 +44,11 @@ MemManager::~MemManager() {
 
 void* MemManager::malloc(unsigned int size)
 {
+	const unsigned int maxMallocMem = 1024 * 1024 * 50; //50M
+	if (size > maxMallocMem) {//forbit malloc > 50M one times.
+		logs(Logger::WARNING, "malloc(%u) is too bigger", size);
+	}
+
 	char* ch = (char*)::malloc(size);
 	uif (ch == NULL){
 		logs(Logger::ERR, "malloc(%u) error", size);

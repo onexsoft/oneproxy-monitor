@@ -58,6 +58,11 @@
 			Logger::get_logger()->log_force(fmt, ##args);\
 }while(0)
 
+#define logs_buf_unicodeStr(name, buf, bufLen) do{\
+	if (Logger::get_logger()->get_dumpData()) \
+		Logger::get_logger()->log_unicodeStr((char*)name, buf, bufLen); \
+}while(0)
+
 #define logs_setLevel(level) Logger::get_logger()->set_logLevel(level)
 #define logs_setBatchNum(batchNum) Logger::get_logger()->set_batchNum(batchNum)
 #define logs_finished() Logger::get_logger()->flush()
@@ -82,7 +87,9 @@ public:
 	void log(loggerLevel level, const char* fmt, ...);
 	void flush();
 	void log_hex(char* name, void *data, int dataLen);
+	void delete_logFile();
 
+	void log_unicodeStr(char* name, void* data, int dataLen);
 
 private:
 	Logger(){
@@ -97,6 +104,7 @@ private:
 	~Logger();
 	Logger& operator= (const Logger& );
 	void output(const char* hint, const char* fmt, va_list args);
+	unsigned long int get_threadId();
 	void outputStrategy(const char* logstr);
 	void outputConsoleOrFile(const char* logstr);
 	std::string current_timeStr();

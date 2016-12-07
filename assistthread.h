@@ -43,6 +43,9 @@ public:
 
 	void stop();
 	bool get_stop();
+
+	bool connect_dataBaseIsOk(std::string addr, unsigned int port);
+	void check_dataBaseActive();
 private:
 	static thread_start_func(start);
 

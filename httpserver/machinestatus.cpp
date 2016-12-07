@@ -85,7 +85,7 @@ int MachineStatus::get_systemCpuInfo(CpuInfo* ci) {
         if (strcmp(cpu, "ctxt") == 0) {
             sscanf(buf, "%s %d", cpu, &ci->context);
         } else if (strcmp(cpu, "btime") == 0) {
-            sscanf(buf, "%s %d", cpu, &ci->uptime);
+            sscanf(buf, "%s %u", cpu, &ci->uptime);
         } else if (strcmp(cpu, "processes") == 0) {
             sscanf(buf, "%s %d", cpu, &ci->processes);
         } else if (strcmp(cpu, "procs_running") == 0) {
@@ -115,7 +115,7 @@ int MachineStatus::get_systemPageSwap(PageSwap* ps)
     unsigned int value;
 
     while(fgets(buf, 1024, file) != NULL) {
-        sscanf(buf, "%s %d", name, &value);
+        sscanf(buf, "%s %u", name, &value);
         if (strcmp(name, "pgpgin") == 0) {
             ps->pgpgin = value;
         } else if (strcmp(name, "pgpgout") == 0) {
@@ -235,7 +235,7 @@ int MachineStatus::get_systemFileNR(FileNR *fnr)
         return -1;
     }
 
-    fscanf(file, "%d %d %d", &fnr->nropen, &tmp, &fnr->nrtotal);
+    fscanf(file, "%u %u %u", &fnr->nropen, &tmp, &fnr->nrtotal);
     fclose(file);
 
     return 0;

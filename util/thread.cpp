@@ -35,10 +35,10 @@
 //	this->type = thread_type_init;
 //}
 
-Thread::Thread(ThreadType type, std::string threadName)
+Thread::Thread(ThreadType type, std::string tname)
+	:threadName(tname)
 {
 	this->type = type;
-	this->threadName = threadName;
 	this->threadId = 0;
 	this->userFunc = NULL;
 	this->userFuncArgs = NULL;

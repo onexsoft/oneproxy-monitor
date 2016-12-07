@@ -58,6 +58,7 @@ typedef struct _uri_param_t{
 	std::string tableName; //when show sqls used.
 	int sqltype; //0: query sql list, 1: query fail sql list
 	unsigned int transhashcode; //when find trans used.
+	unsigned int clientuserappinfohashcode; //when top who's sql used.
 	//real stat time
 	bool isRealTime;
 	_uri_param_t() {
@@ -67,6 +68,7 @@ typedef struct _uri_param_t{
 		this->sqlhashcode = 0;
 		this->sqltype = -1;
 		this->transhashcode = 0;
+		this->clientuserappinfohashcode = 0;
 		this->isRealTime = false;
 	}
 }UriParam;
@@ -142,6 +144,7 @@ private:
 	void response_setMenu(TopMenu &topMenu);
 
 	void response_topclients(Http& http);
+	void response_topwho(Http& http);
 	void response_topsqls(Http& http);
 	void response_toptables(Http& http);
 	void response_toptablesMap(Http& http);
@@ -158,6 +161,7 @@ private:
 	void response_taskThread(Http& http);
 	void response_lock(Http& http);
 	void response_htmlPage(Http& http);//html page
+	void response_dataBase(Http& http);
 
 	void parse_uriParam(Http& http, UriParam& uriParam);
 	void parse_httpServerConfig(Http& http);

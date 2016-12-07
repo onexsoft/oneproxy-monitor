@@ -52,6 +52,46 @@ bool AssistThread::get_stop()
 	return this->is_stop;
 }
 
+bool AssistThread::connect_dataBaseIsOk(std::string addr, unsigned int port)
+{
+	static TcpClient tcpClient;
+	NetworkSocket* ns = new NetworkSocket(addr, port);
+	if (tcpClient.get_backendConnection(ns)) {
+		return false;
+	}
+	ns->closeSocket(ns->get_fd());
+	return true;
+}
+
+void AssistThread::check_dataBaseActive()
+{
+	unsigned int dbgs = config()->get_dataBaseGroupSize();
+	for (unsigned int i = 0; i < dbgs; ++i) {
+		DataBaseGroup* dbg = config()->get_dataBaseGroup(i);
+		std::vector<DataBase*>::iterator it = dbg->get_dbMasterGroupVec().begin();
+		for (; it != dbg->get_dbMasterGroupVec().end(); ++it) {
+			if (this->connect_dataBaseIsOk((*it)->get_addr(), (*it)->get_port())) {
+				(*it)->set_isActive(true);
+			} else {
+				(*it)->set_isActive(false);
+				logs(Logger::WARNING, "database (%s:%d) is offline",
+						(*it)->get_addr().c_str(), (*it)->get_port());
+			}
+		}
+
+		std::vector<DataBase*>::iterator sit = dbg->get_dbSlaveGroupVec().begin();
+		for (; sit != dbg->get_dbSlaveGroupVec().end(); ++sit) {
+			if (this->connect_dataBaseIsOk((*sit)->get_addr(), (*sit)->get_port())) {
+				(*sit)->set_isActive(true);
+			} else {
+				(*sit)->set_isActive(false);
+				logs(Logger::WARNING, "database (%s:%d) is offline",
+										(*sit)->get_addr().c_str(), (*sit)->get_port());
+			}
+		}
+	}
+}
+
 thread_start_func(AssistThread::start)
 {
 	AssistThread* self = (AssistThread*)args;
@@ -61,8 +101,12 @@ thread_start_func(AssistThread::start)
 	ConnectionPool::get_pool().set_idleTimeoutRelease(config()->get_poolConnTimeoutReleaseTime());
 
 	while(false == self->get_stop()) {
+
+		//check database is active or not
+		self->check_dataBaseActive();
+
 		//update global time
-		config()->set_globalSecondTime(SystemApi::system_millisecond());
+		config()->update_globalSecondTime();
 
 		//check the socket is active in pool
 		ConnectionPool::get_pool().check_connectActive();

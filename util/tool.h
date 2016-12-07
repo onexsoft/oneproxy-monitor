@@ -48,7 +48,7 @@ public:
 
 	static std::string itoa(const int number);
 
-	static char* format_string(const char* str, const unsigned int length);
+	static std::string format_string(const char* str, const unsigned int strLen, const unsigned int length);
 	static void tolower(std::string& str);
 	static void toupper(std::string &str);
 	static std::string args2string(const char* fmt, ...);

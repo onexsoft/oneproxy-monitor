@@ -47,12 +47,10 @@ typedef pthread_mutex_t MutexLockHandle;
 typedef pthread_cond_t MutexCondHandle;
 #endif
 
-class Record;
 class MutexLock{
 public:
 	MutexLock();
 	MutexLock(std::string name);
-	MutexLock(std::string name, Record *record);
 	~MutexLock();
 
 	inline void initMutex();
@@ -62,13 +60,10 @@ public:
 	std::string get_name();
 	void wait_mutexCond(int timeout = -1);//单位为毫秒
 	void signal_mutexCond();
-
-	void set_record(Record *record);
 private:
 	MutexLockHandle mutex;
 	MutexCondHandle mutexCond;
 	std::string mutexName;
-	Record *record;
 };
 void MutexLock::initMutex()
 {

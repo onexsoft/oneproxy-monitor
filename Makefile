@@ -11,7 +11,7 @@ $(shell if [ ! -d $(BUILD)/$(BUILD_TEST_BIN) ]; then mkdir -p $(BUILD)/$(BUILD_T
 	INSTALLDIR = /usr/local/superoneproxy/
 	LDFLAGS = 
 	OPENSSL = /usr/local/openssl
-
+	
 	LIBS = -pthread ./libtcmalloc_minimal.a ./stats/libsqlite3.a $(OPENSSL)/lib/libssl.a $(OPENSSL)/lib/libcrypto.a -ldl
 	INCLUDE = -I$(OPENSSL)/include
 endif

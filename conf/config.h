@@ -68,6 +68,9 @@ class DataBase: public ConfigBase{
 	declare_class_member(std::string, userName)
 	declare_class_member(std::string, password)
 
+	//internal use parameter
+	declare_class_member(bool, isActive)
+
 	declare_cvt_func(cvtString)
 	declare_cvt_func(cvtInt)
 public:
@@ -75,6 +78,7 @@ public:
 		this->m_port = 0;
 		this->m_weightValue = 0;
 		this->m_connectNum = 0;
+		this->m_isActive = true;
 	}
 	DataBase(std::string labelName, std::string addr, unsigned int port, unsigned int weightValue,
 			std::string userName, std::string password):
@@ -84,7 +88,8 @@ public:
 		m_weightValue(weightValue),
 		m_connectNum(0),
 		m_userName(userName),
-		m_password(password)
+		m_password(password),
+		m_isActive(true)
 	{
 	}
 
@@ -175,6 +180,7 @@ class Config: public ConfigBase{
 
 	//global time, one second update once, don't set value by user.
 	declare_class_member(u_uint64, globalSecondTime);
+	void update_globalSecondTime();//update globalSecondTime
 
 	declare_cvt_func(cvtString)
 	declare_cvt_func(cvtInt)

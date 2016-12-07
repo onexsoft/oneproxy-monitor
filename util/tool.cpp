@@ -133,9 +133,6 @@ int Tool::string2byte(const std::string& str, StringBuf& bdata)
 
 int Tool::byte2wstring(const u_uint8* bdata, const unsigned int bdataLen, std::wstring& wstr)
 {
-	if (bdataLen <= 0)
-		return 0;
-
 	if (bdataLen%2 != 0) {
 		return -1;
 	}
@@ -168,15 +165,17 @@ std::string Tool::itoa(const int number)
 	return std::string(buf, strlen(buf));
 }
 
-char* Tool::format_string(const char* str, const unsigned int strLen)
+std::string Tool::format_string(const char* str, const unsigned int strLen, const unsigned int length)
 {
-	if (strlen(str) > strLen) {
-		std::string tmpstr;
-		tmpstr = std::string(str, strLen - 3);
+	std::string tmpstr;
+	if (strLen > length) {
+		tmpstr = std::string(str, length - 3);
 		tmpstr.append("...\0");
-		return (char*)tmpstr.c_str();
+		return tmpstr;
+	} else {
+		tmpstr = std::string(str, strLen);
 	}
-	return (char*)str;
+	return tmpstr;
 }
 
 void Tool::tolower(std::string& str)

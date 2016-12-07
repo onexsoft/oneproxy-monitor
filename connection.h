@@ -45,6 +45,9 @@ typedef enum _query_type_t{
 	SIMPLE_QUERY_SUM,
 
 	TRANS_QUERY_TYPE,
+	TRANS_QUERY_TRANSMGRREQ_BEGIN_TYPE,
+	TRANS_QUERY_TRANSMGRREQ_COMMIT_TYPE,
+	TRANS_QUERY_TRANSMGRREQ_ROLLBACK_TYPE,
 	TRANS_QUERY_TRANS_ON_TYPE,
 	TRANS_QUERY_TRANS_OFF_TYPE,
 	TRANS_QUERY_TRANS_ON_COMMIT_TYPE,
@@ -57,6 +60,11 @@ typedef enum _query_type_t{
 
 	QUERY_TYPE_SUM,
 } QueryType;
+
+typedef enum _conn_exec_status_t{
+	CONN_EXEC_STATUS_NORMAL,
+	CONN_EXEC_STATUS_ERROR//when connection get error packet from server, set this status.
+}ConnExecStatus;
 
 typedef struct _sql_info_t{
 	unsigned int sqlHashCode; //sql hash code
@@ -174,15 +182,22 @@ typedef struct _connection_t {
 	u_uint64 activeTime; //when receive data, update the time. unit:second.
 	AutoPointer pointer;
 	SessionData sessData;
+	ConnExecStatus status;
 	_connection_t() {
 		this->protocolBase = NULL;
 		this->createConnTime = 0;
-		this->activeTime = config()->get_globalSecondTime();//use global time, decrease call system api
+		this->activeTime = 0;
+		this->status = CONN_EXEC_STATUS_NORMAL;
 	}
 #define clins() sock.curclins
 #define servns() sock.curservs
 #define curdb() database.currentDataBase
 #define handleManager() sessData.preparedCursorManager
 } Connection;
+
+typedef enum _conn_finish_type{
+	CONN_FINISHED_NORMAL,
+	CONN_FINISHED_ERR
+}ConnFinishType;
 
 #endif /* CONNECTION_H_ */
