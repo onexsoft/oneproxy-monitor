@@ -126,10 +126,8 @@ int StringBuf::append(const char* str)
 		this->m_offset = 0;
 		return 0;
 	}
-
 	memmove((void*)(this->m_buf + this->m_length), (void*)str, strlen(str));
 	this->m_length += strlen(str);
-
 	return 0;
 }
 

@@ -29,11 +29,12 @@
 #include "epoll.h"
 
 Epoll::Epoll(std::string name)
-	:IoEvent(name)
+	:IoEvent(name),
+	 maxEvents(1000)
 {
 #ifndef WIN32
-	epfd = epoll_create(256);//the max handles
-	trigerMethod = EPOLLET;
+	epfd = epoll_create(maxEvents);//the max handles
+	trigerMethod = EPOLLET;//EPOLLET
 #else
 	epfd = 0;
 	trigerMethod = 0;
@@ -61,6 +62,10 @@ int Epoll::add_ioEvent(unsigned int fd, unsigned int event, Func func, void *arg
 	eventInfo.fp = func;
 	eventInfo.func_param = args;
 
+	if ((event != (unsigned int ) -1)
+			&& this->is_eventExisted(fd, eventInfo)) {//existed. don't to regester again.
+		return 0;
+	}
 	mutexLock.lock();
 	this->add_ioEventInfo(fd, eventInfo, is_new);
 	mutexLock.unlock();
@@ -102,7 +107,7 @@ int Epoll::add_ioEventWrite(unsigned int fd, Func func, void *args)
 
 int Epoll::add_ioEventAccept(unsigned int fd, Func func, void *args)
 {
-	return this->add_ioEvent(fd, (unsigned int)-1, func, args);
+	return this->add_ioEvent(fd, (unsigned int)(-1), func, args);
 }
 
 bool Epoll::is_readEvent(unsigned int event)
@@ -154,7 +159,6 @@ void Epoll::run_loopWithTimeout(int epollTimeout)
 void Epoll::run_eventWait(int epollTimeout)
 {
 #ifdef linux
-	const int maxEvents = 20;
 	int nfds = 0;
 	struct epoll_event events[maxEvents];
 

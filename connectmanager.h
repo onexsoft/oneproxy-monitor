@@ -36,20 +36,18 @@
 #include "httpserver.h"
 #include "mutexlock.h"
 #include "networksocket.h"
-#include "oneproxyserver.h"
 #include "assistthread.h"
+#include "oneproxyserver.h"
+#include "clientthread.h"
 
 #include <map>
 #include <queue>
 #include <iostream>
-
-
 #ifdef WIN32
 #include <windows.h>
 #else
 #include <pthread.h>
 #endif
-
 #include <signal.h>
 
 class ConnectManager
@@ -57,48 +55,30 @@ class ConnectManager
 public:
 	ConnectManager(int threadNum = 5);
 	~ConnectManager();
-
 	void add_task(NetworkSocket *clientSocket);
-
-	int get_taskSize();
-	NetworkSocket* get_task();
 	MutexLock* get_mutexLock();
-
-	NetworkSocket* find_runningTask(u_uint64 threadId, int fd);
-	int add_runningTask(u_uint64 threadId, NetworkSocket* ns);
-	void finished_task(u_uint64 threadId, NetworkSocket* ns);
-
+	ClientThread* get_minTaskThread();
+	int get_taskSize();
 	void start();
 
 private:
-	u_uint64 get_clientThread();//获取需要分配任务的线程
+	unsigned int get_allThreadTaskSize();
 	void alloc_task();//分配任务
-	unsigned int get_runningTaskQueueSize();
-	void set_stop();
 	static void handle_signal(int sig);
-
 
 private:
 	declare_type_alias(ThreadMapType, std::map<u_uint64, Thread*>)//key: threadId
 	declare_type_alias(TaskQueue, std::queue <NetworkSocket* >)
-	declare_type_alias(FdNetworkSocketMap, std::map<int, NetworkSocket*>)//key:threadId, second key: fd
-	declare_type_alias(ThreadTaskQueue, std::map<u_uint64, FdNetworkSocketMap>)
 
 	int threadNum;
 	static bool stop;
-	ThreadMapType threadMap; //key: threadId
-
-	TaskQueue taskQueue; //need to handle sock
-	MutexLock mutexLock;
-
-	//every thread allocate task
-	ThreadTaskQueue runningTaskQueue;
-	MutexLock runningTaskQueueMutexLock;
-
-	HttpServer httpServer;
 	Vip vipThread;
-
-	static OneproxyServer oneproxyServer;
+	ThreadMapType threadMap; //key: threadId
+	TaskQueue taskQueue; //need to handle sock
+	static MutexLock mutexLock;
+	HttpServer httpServer;
 	AssistThread assistThread;
+	static AcceptThreadManager acceptThreadManager;
+
 };
 #endif /* CONNECTMANAGER_H_ */

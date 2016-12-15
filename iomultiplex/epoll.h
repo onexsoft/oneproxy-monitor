@@ -67,6 +67,8 @@ private:
 	unsigned int epfd;
 
 	MutexLock mutexLock;
+
+	const int maxEvents;
 };
 
 #endif /* EPOLL_H_ */

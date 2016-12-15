@@ -228,12 +228,12 @@ void HttpResponse::response_topclients(Http& http)
 	std::vector<stats::ClientQueryInfo*> clientInfoVec;
 	stats::ClientInfoMap tmpMap;
 	if (uriParam.sqlhashcode <= 0) {
-		record->clientQueryMapMutex.lock();
+		record->clientQueryMapLock.lock();
 		this->change_map2vecSort<std::vector<stats::ClientQueryInfo*>, stats::ClientInfoMap, stats::ClientInfoMap::iterator>
 		(ttiv, uriParam, clientInfoVec, record->clientQueryMap);
-		record->clientQueryMapMutex.unlock();
+		record->clientQueryMapLock.unlock();
 	} else {
-		record->clientQueryMapMutex.lock();
+		record->clientQueryMapLock.lock();
 		stats::ClientInfoMap::iterator it = record->clientQueryMap.begin();
 		for (; it != record->clientQueryMap.end(); ++it) {
 			if (it->second.sqlList.find(uriParam.sqlhashcode) != it->second.sqlList.end()) {
@@ -241,7 +241,7 @@ void HttpResponse::response_topclients(Http& http)
 					tmpMap[it->first] = it->second;
 			}
 		}
-		record->clientQueryMapMutex.unlock();
+		record->clientQueryMapLock.unlock();
 		this->change_map2vecSort<std::vector<stats::ClientQueryInfo*>, stats::ClientInfoMap, stats::ClientInfoMap::iterator>
 		(ttiv, uriParam, clientInfoVec, tmpMap);
 	}
@@ -278,7 +278,7 @@ void HttpResponse::response_topclients(Http& http)
 		http.outputBuf.appendFormat("<td>%.2f</td>", (it->part.downDataSize * 1.0)/ (1024.0));
 		u_uint64 onLineTime = it->part.onLineTime;
 		if (it->part.onLineStatus == true) {
-			onLineTime += (SystemApi::system_millisecond() - it->part.start_connect_time);
+			onLineTime += (config()->get_globalMillisecondTime() - it->part.start_connect_time);
 		}
 		http.outputBuf.appendFormat("<td>%.2f</td>", (onLineTime * 1.0)/(1000.0));
 		if (it->part.onLineStatus == true) {
@@ -399,7 +399,7 @@ void HttpResponse::response_topsqls(Http& http)
 	std::vector<stats::SqlInfo*> sqlInfoVec;
 	stats::SqlInfoMap tmpMap;
 	if (uriParam.clientHashCode > 0) {
-		record->sqlInfoMapMutex.lock();
+		record->sqlInfoMapLock.lock();
 		stats::SqlInfoMap::iterator it = record->sqlInfoMap.begin();
 		for (; it != record->sqlInfoMap.end(); ++it) {
 			if (it->second.clientSet.find(uriParam.clientHashCode) != it->second.clientSet.end()) {
@@ -412,11 +412,11 @@ void HttpResponse::response_topsqls(Http& http)
 				}
 			}
 		}
-		record->sqlInfoMapMutex.unlock();
+		record->sqlInfoMapLock.unlock();
 		this->change_map2vecSort<std::vector<stats::SqlInfo*>, stats::SqlInfoMap, stats::SqlInfoMap::iterator>
 		(ttiv, uriParam, sqlInfoVec, tmpMap);
 	} else if (uriParam.tableName.size() > 0) {
-		record->sqlInfoMapMutex.lock();
+		record->sqlInfoMapLock.lock();
 		stats::SqlInfoMap::iterator it = record->sqlInfoMap.begin();
 		for (; it != record->sqlInfoMap.end(); ++it) {
 			if (it->second.tableSet.find(uriParam.tableName) != it->second.tableSet.end()) {
@@ -424,7 +424,7 @@ void HttpResponse::response_topsqls(Http& http)
 					tmpMap[it->first] = it->second;
 			}
 		}
-		record->sqlInfoMapMutex.unlock();
+		record->sqlInfoMapLock.unlock();
 		this->change_map2vecSort<std::vector<stats::SqlInfo*>, stats::SqlInfoMap, stats::SqlInfoMap::iterator>
 		(ttiv, uriParam, sqlInfoVec, tmpMap);
 
@@ -445,10 +445,10 @@ void HttpResponse::response_topsqls(Http& http)
 			(ttiv, uriParam, sqlInfoVec, tmpMap);
 		}
 	} else {
-		record->sqlInfoMapMutex.lock();
+		record->sqlInfoMapLock.lock();
 		this->change_map2vecSort<std::vector<stats::SqlInfo*>, stats::SqlInfoMap, stats::SqlInfoMap::iterator>
 		(ttiv, uriParam, sqlInfoVec, record->sqlInfoMap);
-		record->sqlInfoMapMutex.unlock();
+		record->sqlInfoMapLock.unlock();
 	}
 
 	//3. generate table header
@@ -538,7 +538,7 @@ void HttpResponse::response_toptables(Http& http)
 
 	//get table info base sql map
 	stats::TableInfoMap tableInfoMap;
-	record->sqlInfoMapMutex.lock();
+	record->sqlInfoMapLock.lock();
 	stats::SqlInfoMap::iterator it = record->sqlInfoMap.begin();
 	for (; it != record->sqlInfoMap.end(); ++it) {
 		stats::SqlInfo& sqlInfo = it->second;
@@ -584,7 +584,7 @@ void HttpResponse::response_toptables(Http& http)
 			}
 		}
 	}
-	record->sqlInfoMapMutex.unlock();
+	record->sqlInfoMapLock.unlock();
 
 	TableTitleInfoVec ttiv;
 	ttiv.push_back(tti1);
@@ -658,7 +658,7 @@ void HttpResponse::response_toptablesMap(Http& http)
 		//从sqlInfoMap中抽取信息
 		StringBuf tmpBuf;
 
-		record->sqlInfoMapMutex.lock();
+		record->sqlInfoMapLock.lock();
 		stats::SqlInfoMap& sqlInfoMap = record->sqlInfoMap;
 		stats::SqlInfoMap::iterator it = sqlInfoMap.begin();
 		for (; it != sqlInfoMap.end(); ++it) {
@@ -693,7 +693,7 @@ void HttpResponse::response_toptablesMap(Http& http)
 			tableMapInfoMap[key].part.exec += it->second.part.exec;
 			tableMapInfoMap[key].sqlHashCode.insert(it->first);
 		}
-		record->sqlInfoMapMutex.unlock();
+		record->sqlInfoMapLock.unlock();
 	}
 
 	TableTitleInfoVec ttiv;
@@ -775,10 +775,10 @@ void HttpResponse::response_topTrans(Http& http)
 
 	//2. sort
 	std::vector<stats::TransInfo*> transInfoVec;
-	record->transInfoMapMutex.lock();
+	record->transInfoMapLock.lock();
 	this->change_map2vecSort<std::vector<stats::TransInfo*>, stats::TransInfoMap, stats::TransInfoMap::iterator>
 	(ttiv, uriParam, transInfoVec, record->transInfoMap);
-	record->transInfoMapMutex.unlock();
+	record->transInfoMapLock.unlock();
 
 	//3. generate table header
 	this->gen_tableTitle(ttiv, uriParam, "Top Trans", transInfoVec.size(), http);
@@ -855,7 +855,7 @@ void HttpResponse::response_findsql(Http& http)
 
 	bool hasOutputData = false;
 	if (uriParam.sqlhashcode != 0) {
-		record->sqlInfoMapMutex.lock();
+		record->sqlInfoMapLock.lock();
 		stats::SqlInfoMap::iterator it = record->sqlInfoMap.find(uriParam.sqlhashcode);
 		if (it != record->sqlInfoMap.end()) {
 			http.outputBuf.append("<tr>");
@@ -895,11 +895,11 @@ void HttpResponse::response_findsql(Http& http)
 			http.outputBuf.append("</tr>");
 			hasOutputData = true;
 		}
-		record->sqlInfoMapMutex.unlock();
+		record->sqlInfoMapLock.unlock();
 	}
 
 	if (uriParam.transhashcode != 0) {
-		record->transInfoMapMutex.lock();
+		record->transInfoMapLock.lock();
 		stats::TransInfoMap::iterator tit = record->transInfoMap.find(uriParam.transhashcode);
 		if (tit != record->transInfoMap.end()) {
 			http.outputBuf.append("<tr>");
@@ -933,7 +933,7 @@ void HttpResponse::response_findsql(Http& http)
 			hasOutputData = true;
 
 		}
-		record->transInfoMapMutex.unlock();
+		record->transInfoMapLock.unlock();
 	}
 
 	if ((uriParam.sqlhashcode || uriParam.transhashcode) && !hasOutputData) {
@@ -1218,7 +1218,7 @@ void HttpResponse::response_lock(Http& http)
 	this->parse_uriParam(http, uriParam);
 	this->gen_tableTitle(ttiv, uriParam, "Lock Information", record()->recordMutexMap.size(), http);
 
-	record()->recordMutexMapMutex.lock();
+//	record()->recordMutexMapMutex.lock();
 	stats::RecordMutexMap::iterator it =  record()->recordMutexMap.begin();
 	for (; it != record()->recordMutexMap.end(); ++it) {
 		if (it->second.is_show() == false)
@@ -1230,7 +1230,7 @@ void HttpResponse::response_lock(Http& http)
 		http.outputBuf.appendFormat("<td>%lld</td>", it->second.unlockNum);
 		http.outputBuf.append("</tr>");
 	}
-	record()->recordMutexMapMutex.unlock();
+//	record()->recordMutexMapMutex.unlock();
 	http.outputBuf.append("</table>");
 }
 

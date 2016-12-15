@@ -28,6 +28,7 @@
 
 #include "protocolbase.h"
 #include "connectionpool.h"
+#include "pgprotocol.h"
 
 ProtocolHandleRetVal ProtocolBase::protocol_front(Connection& conn)
 {
@@ -96,7 +97,6 @@ ProtocolHandleRetVal ProtocolBase::protocol_backend(Connection& conn)
 	StringBuf& packet = conn.sock.get_curServSock()->get_recvData();
 	int oldOffset = packet.get_offset();
 	ProtocolHandleRetVal resultValue = HANDLE_RETURN_SUCCESS;
-
 	do {
 		//1. 累计后端得到的数据
 		this->stat_readBackendData(conn);
@@ -243,7 +243,7 @@ int ProtocolBase::protocol_createBackendConnect(Connection& conn)
 				return -1;
 			}
 			ns->set_dataBase(conn.curdb());
-			ns->inc_dataBaseConnect();
+			conn.curdb()->inc_connectionNum();
 
 			logs(Logger::DEBUG, "Create new socket(%d)", conn.sock.curservs->get_fd());
 			if (conn.database.dataBaseGroup && conn.database.dataBaseGroup->get_useConnectionPool()) {
@@ -384,17 +384,17 @@ int ProtocolBase::parse_sql(Connection& conn, std::string sqlText)
 void ProtocolBase::stat_readFrontData(Connection& conn)
 {
 	record()->record_clientQuerySendSize(conn.clins()->get_addressHashCode(),
-			conn.clins()->get_recvData().get_length());
+			conn.clins()->get_recvData().get_length(), conn.sessData.clientInfo);
 }
 
 //统计从后端返回的数据
 void ProtocolBase::stat_readBackendData(Connection& conn)
 {
 	record()->record_clientQueryRecvSize(conn.clins()->get_addressHashCode(),
-			conn.servns()->get_recvData().get_length());
+			conn.servns()->get_recvData().get_length(), conn.sessData.clientInfo);
 
 	record()->record_sqlInfoRecvSize(conn.record.sqlInfo.sqlHashCode,
-			conn.servns()->get_recvData().get_length());
+			conn.servns()->get_recvData().get_length(), conn.sessData.sqlInfo);
 }
 
 //开始事务
@@ -443,7 +443,7 @@ void ProtocolBase::stat_saveSql(Connection& conn, std::string& sqlText)
 	conn.record.sqlInfo.sqlHashCode = Tool::quick_hash_code(sqlText.c_str(), sqlText.length());
 
 	record()->record_sqlInfoAddSql(conn);
-	record()->record_clientQueryAddSql(conn);
+	record()->record_clientQueryAddSql(conn, conn.sessData.clientInfo);
 }
 
 //记录当前执行的sql，这个sql是经过解析器改写后的sql语句，及把值替换后的sql语句
@@ -478,20 +478,21 @@ int ProtocolBase::stat_parseSql(Connection& conn, std::string& sqlText)
 void ProtocolBase::stat_executeSql(Connection& conn)
 {
 	//record time
-	conn.record.startQueryTime = SystemApi::system_millisecond();
+	conn.record.startQueryTime = config()->get_globalMillisecondTime();
 	conn.record.totalRow = 0;
 
 	if (conn.record.sqlInfo.sqlHashCode <= 0)
 		return;
 
 	//record client
-	record()->record_clientQueryExec(conn.record.sqlInfo.sqlHashCode, conn.clins()->get_addressHashCode());
+	record()->record_clientQueryExec(conn.record.sqlInfo.sqlHashCode,
+			conn.clins()->get_addressHashCode(), conn.sessData.clientInfo);
 
-	record()->record_sqlInfoExec(conn.record.sqlInfo.sqlHashCode);
+	record()->record_sqlInfoExec(conn.record.sqlInfo.sqlHashCode, conn.sessData.sqlInfo);
 	//in trans.
 	if (conn.record.type >= TRANS_QUERY_TYPE && conn.record.type < TRANS_QUERY_SUM) {
 		conn.record.sqlSet.insert(conn.record.sqlInfo.sqlHashCode);
-		record()->record_sqlInfoExecTran(conn.record.sqlInfo.sqlHashCode);
+		record()->record_sqlInfoExecTran(conn.record.sqlInfo.sqlHashCode, conn.sessData.sqlInfo);
 	}
 }
 
@@ -546,15 +547,15 @@ void ProtocolBase::stat_recvOneRow(Connection& conn)
 //接收完成，其中rows时结束包中提供的总数据行数，如果没有，可以不用填写
 void ProtocolBase::stat_recvFinishedRow(Connection& conn, unsigned int rows)
 {
-	record()->record_sqlInfoRecvResult(conn, rows);
+	record()->record_sqlInfoRecvResult(conn, rows, conn.sessData.sqlInfo);
 	conn.record.totalRow = 0;
 }
 
 //sql语句执行错误,这个函数应该与stat_recvFinishedRow互斥
 void ProtocolBase::stat_executeErr(Connection& conn)
 {
-	record()->record_sqlInfoExecFail(conn);
-	record()->record_clientQueryExecFail(conn);
+	record()->record_sqlInfoExecFail(conn, conn.sessData.sqlInfo);
+	record()->record_clientQueryExecFail(conn, conn.sessData.clientInfo);
 }
 
 void ProtocolBase::stat_login(Connection& conn)

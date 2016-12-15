@@ -39,7 +39,7 @@ AssistThread::AssistThread(ConnectManager* manager)
 
 AssistThread::~AssistThread()
 {
-
+	this->joinThread();
 }
 
 void AssistThread::stop()
@@ -56,10 +56,13 @@ bool AssistThread::connect_dataBaseIsOk(std::string addr, unsigned int port)
 {
 	static TcpClient tcpClient;
 	NetworkSocket* ns = new NetworkSocket(addr, port);
+
 	if (tcpClient.get_backendConnection(ns)) {
+		delete ns;
 		return false;
 	}
-	ns->closeSocket(ns->get_fd());
+
+	delete ns;
 	return true;
 }
 
@@ -106,7 +109,7 @@ thread_start_func(AssistThread::start)
 		self->check_dataBaseActive();
 
 		//update global time
-		config()->update_globalSecondTime();
+		config()->update_globalTime();
 
 		//check the socket is active in pool
 		ConnectionPool::get_pool().check_connectActive();

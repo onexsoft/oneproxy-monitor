@@ -33,6 +33,7 @@
 #include "mutexlock.h"
 #include "record_define.h"
 #include "connection.h"
+#include "uspinlock.h"
 
 
 #define record() stats::Record::get_recordInstance()
@@ -60,6 +61,7 @@ public:
 	void record_acceptClientConn();
 	void record_startHandingConn();
 	void record_closeClientConn();
+	void record_threadRecvConn(u_uint64 threadId);
 	void record_threadStartHandingConn(u_uint64 threadId);
 	void record_threadFinishedConn(u_uint64 threadId);
 	void record_threadFailConn(u_uint64 threadId);
@@ -74,22 +76,25 @@ public:
 		this->record_print_time_interval = time;
 	}
 
-	void record_clientQueryRecvSize(unsigned int hashCode, unsigned int size);
-	void record_clientQuerySendSize(unsigned int hashCode, unsigned int size);
-	void record_clientQueryAddSql(Connection& conn);
-	void record_clientQueryExec(unsigned int sqlHashCode, unsigned int clientAddressHashCode);
-	void record_clientQueryExecFail(Connection& conn);
-	void record_clientQueryOnLineTime(unsigned int hashCode, u_uint64 time);
-	void record_clientQueryOffLine(unsigned int hashCode);
-	void record_clientQueryAllocServerFail(unsigned int hashCode);
+	void record_clientQueryRecvSize(unsigned int hashCode, unsigned int size, ClientQueryInfo* clientInfo = NULL);
+	void record_clientQuerySendSize(unsigned int hashCode, unsigned int size, ClientQueryInfo* clientInfo = NULL);
+	void record_clientQueryAddSql(Connection& conn, ClientQueryInfo* clientInfo = NULL);
+	void record_clientQueryExec(unsigned int sqlHashCode, unsigned int clientAddressHashCode,
+			ClientQueryInfo* clientInfo = NULL);
+	void record_clientQueryExecFail(Connection& conn, ClientQueryInfo* clientInfo = NULL);
+	void record_clientQueryOnLineTime(unsigned int hashCode, u_uint64 time, ClientQueryInfo* clientInfo = NULL);
+	void record_clientQueryOffLine(unsigned int hashCode, ClientQueryInfo* clientInfo = NULL);
+	void record_clientQueryAllocServerFail(unsigned int hashCode, ClientQueryInfo* clientInfo = NULL);
 	void record_clientQueryAddNewClient(unsigned int hashCode, std::string address);
+	ClientQueryInfo* record_getClientQueryInfo(unsigned int hashCode);
 
-	void record_sqlInfoRecvSize(unsigned int hashCode, unsigned int size);
+	void record_sqlInfoRecvSize(unsigned int hashCode, unsigned int size, SqlInfo* sqlInfo = NULL);
 	void record_sqlInfoAddSql(Connection& conn);
-	void record_sqlInfoExec(unsigned int hashCode);
-	void record_sqlInfoExecTran(unsigned int hashCode);
-	void record_sqlInfoRecvResult(Connection& conn, unsigned int rows);
-	void record_sqlInfoExecFail(Connection& conn);
+	void record_sqlInfoExec(unsigned int hashCode, SqlInfo* sqlInfo = NULL);
+	void record_sqlInfoExecTran(unsigned int hashCode, SqlInfo* sqlInfo = NULL);
+	void record_sqlInfoRecvResult(Connection& conn, unsigned int rows, SqlInfo* sqlInfo = NULL);
+	void record_sqlInfoExecFail(Connection& conn, SqlInfo* sqlInfo = NULL);
+	SqlInfo* record_getSqlInfo(unsigned int hashCode);
 
 	void record_transInfoEndTrans(unsigned int hashCode, Connection& conn);
 
@@ -116,18 +121,19 @@ public:
 	u_uint64 sum_handingClientConn;//正在处理的客户端连接
 	u_uint64 sum_waitClientConn;//正在等待的客户端连接
 	u_uint64 sum_closeClientConn;//从系统启动到目前关闭的客户端连接
+	USpinLock clientConnLock;
 
 	SqlInfoMap sqlInfoMap;//sql语句查询的统计情况
-	MutexLock sqlInfoMapMutex;
+	USpinLock sqlInfoMapLock;
 
 	TransInfoMap transInfoMap; //事务的统计情况
-	MutexLock transInfoMapMutex;
+	USpinLock transInfoMapLock;
 
 	ThreadInfoMap threadInfoMap;//线程信息的统计
 	MutexLock threadInfoMapMutex;
 
 	ClientInfoMap clientQueryMap;//客户端查询信息的统计情况
-	MutexLock clientQueryMapMutex;
+	USpinLock clientQueryMapLock;
 
 	RecordMutexMap recordMutexMap; //锁使用情况的统计
 	MutexLock recordMutexMapMutex;

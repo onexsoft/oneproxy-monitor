@@ -40,6 +40,7 @@ HttpServer::HttpServer(std::string serverAddr, unsigned int serverPort, std::str
 
 HttpServer::~HttpServer()
 {
+	this->joinThread();
 	HttpClientMap::iterator it = this->httpClientMap.begin();
 	for (; it != this->httpClientMap.end(); ++it) {
 		delete it->second;

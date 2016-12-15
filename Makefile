@@ -27,7 +27,8 @@ APPSOURCEDIR = ./sql \
 				./protocol \
 				./protocol/fake \
 				./protocol/sqlserver \
-				./protocol/postgresql
+				./protocol/postgresql \
+				./commercial
 
 TESTSOURCEDIR = ./test/ ./unittest/
 

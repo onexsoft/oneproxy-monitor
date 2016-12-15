@@ -30,6 +30,7 @@
 #include "record.h"
 #include "oneproxyserver.h"
 #include "connectmanager.h"
+//#include "google/profiler.h"
 
 int OneproxyServer::start_server()
 {
@@ -47,15 +48,40 @@ int OneproxyServer::start_server()
 	return 0;
 }
 
+thread_start_func(OneproxyServer::start)
+{
+	OneproxyServer *os = (OneproxyServer*)args;
+
+	if (os->create_tcpServer()) {
+		logs(Logger::FATAL, "create tcp server error");
+		return 0;
+	}
+	os->start_success();
+
+	while(os->get_stop() == false) {
+		os->run_server(500);
+	}
+	return 0;
+}
+
 void OneproxyServer::accept_clientRequest(NetworkSocket *clientSocket)
 {
-	char buf[512] = {0};
-	sprintf(buf, "%s:%d", clientSocket->get_address().c_str(), clientSocket->get_port());
-//	unsigned int clientHashCode = Tool::quick_hash_code(buf, strlen(buf));
+	if (this->connectManager == NULL)
+		return;
+
 	unsigned int clientHashCode = Tool::quick_hash_code(clientSocket->get_address().c_str(), clientSocket->get_address().length());
 	clientSocket->set_addressHashCode(clientHashCode);
 	record()->record_clientQueryAddNewClient(clientSocket->get_addressHashCode(), clientSocket->get_address());
-	if (this->connectManager)
-		this->connectManager->add_task(clientSocket);
 
+	if (this->connectManager->get_taskSize() > 0) {
+		this->connectManager->add_task(clientSocket);
+	} else {
+		ClientThread* ct = this->connectManager->get_minTaskThread();
+		if (ct != NULL) {
+			ct->add_task2Queue(clientSocket);
+		} else {
+			this->connectManager->add_task(clientSocket);
+		}
+	}
+	record()->record_acceptClientConn();
 }

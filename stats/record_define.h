@@ -66,12 +66,14 @@ typedef struct thread_info_t{
 	u_uint64 sum_handingClientConn;//正在处理的连接数
 	u_uint64 sum_finishedClientConn;//完成的连接数
 	u_uint64 sum_failClientConn;//处理 失败的连接数
+	u_uint64 sum_waitClientConn;//正在等待的连接数
 	u_uint64 thread_id;
 	void clear() {
 		this->sum_allClientConn = 0;
 		this->sum_handingClientConn = 0;
 		this->sum_finishedClientConn = 0;
 		this->sum_failClientConn = 0;
+		this->sum_waitClientConn = 0;
 	}
 	bool is_show() {
 		return true;
@@ -82,6 +84,7 @@ typedef struct thread_info_t{
 		tit.sum_handingClientConn = this->sum_handingClientConn - a.sum_handingClientConn;
 		tit.sum_finishedClientConn = this->sum_finishedClientConn - a.sum_finishedClientConn;
 		tit.sum_failClientConn = this->sum_failClientConn - a.sum_failClientConn;
+		tit.sum_waitClientConn = this->sum_waitClientConn - a.sum_waitClientConn;
 		tit.thread_id = this->thread_id;
 		return tit;
 	}

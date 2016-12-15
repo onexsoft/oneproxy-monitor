@@ -62,6 +62,14 @@ public:
 		return *this;
 	}
 
+	bool operator == (const EventInfo& eventInfo) const {
+		if (this->fp == eventInfo.fp
+				&& this->func_param == eventInfo.func_param
+				&& this->event == eventInfo.event)
+			return true;
+		return false;
+	}
+
 	~EventInfo() {
 
 	}
@@ -106,6 +114,7 @@ public:
 	const EventInfo* get_IoEventInfo(unsigned int fd);
 	unsigned int get_ioEventInfoSize();
 	const IoEvent::IoEventMapType& get_eventMap();
+	bool is_eventExisted(unsigned int fd, EventInfo event);
 
 	virtual int add_ioEvent(unsigned int fd, unsigned int event, Func func, void* args) = 0;
 	virtual int add_ioEventRead(unsigned int fd, Func func, void* args) = 0;

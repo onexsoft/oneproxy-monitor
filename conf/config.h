@@ -39,6 +39,7 @@
 #include "logger.h"
 #include "mutexlock.h"
 #include "define.h"
+#include "uspinlock.h"
 
 class ConfigBase{};
 typedef struct config_key_value_t ConfigKeyValue;
@@ -73,6 +74,8 @@ class DataBase: public ConfigBase{
 
 	declare_cvt_func(cvtString)
 	declare_cvt_func(cvtInt)
+private:
+	USpinLock spinLock;
 public:
 	DataBase() {
 		this->m_port = 0;
@@ -102,6 +105,18 @@ public:
 	static bool sort_database(DataBase a, DataBase b) {
 		return a.get_weightValue() > b.get_weightValue();
 	}
+
+	void inc_connectionNum() {
+		spinLock.lock();
+		this->set_connectNum(this->get_connectNum() + 1);
+		spinLock.unlock();
+	}
+
+	void dec_connectionNum() {
+		spinLock.lock();
+		this->set_connectNum(this->get_connectNum() - 1);
+		spinLock.unlock();
+	}
 };
 
 class DataBaseGroup: public ConfigBase {
@@ -119,6 +134,15 @@ class DataBaseGroup: public ConfigBase {
 	declare_cvt_func(cvtString)
 	declare_cvt_func(cvtInt)
 	declare_cvt_func(cvtBool)
+private:
+	USpinLock spinLock;
+public:
+	void group_lock() {
+		this->spinLock.lock();
+	}
+	void group_unlock() {
+		this->spinLock.unlock();
+	}
 public:
 	DataBaseGroup() {
 		this->m_frontPort = 0;
@@ -177,10 +201,11 @@ class Config: public ConfigBase{
 	declare_class_member(int, poolConnCheckActiveTime)
 	declare_class_member(int, poolConnTimeoutReleaseTime)
 	declare_class_member(int, connectTimeOut)//when connect timeout, oneproxy will close it.
+	declare_class_member(int, acceptThreadNum)
 
-	//global time, one second update once, don't set value by user.
-	declare_class_member(u_uint64, globalSecondTime);
-	void update_globalSecondTime();//update globalSecondTime
+	//global time, update by one second or poll callback.
+	volatile u_uint64 m_globalMillisecondTime;
+	void update_globalTime();//update globalSecondTime
 
 	declare_cvt_func(cvtString)
 	declare_cvt_func(cvtInt)
@@ -211,6 +236,8 @@ public:
 	void set_dataBaseGroup(DataBaseGroup dataBaseGroup);
 	DataBaseGroup* get_dataBaseGroup(unsigned int index);
 	unsigned int get_dataBaseGroupSize();
+	u_uint64 get_globalSecondTime();
+	u_uint64 get_globalMillisecondTime();
 
 private:
 	std::vector<DataBase> dbVector;

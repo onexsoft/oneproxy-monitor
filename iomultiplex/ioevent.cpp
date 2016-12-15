@@ -87,7 +87,17 @@ const IoEvent::IoEventMapType& IoEvent::get_eventMap() {
 	return this->eventMap;
 }
 
+bool IoEvent::is_eventExisted(unsigned int fd, EventInfo event)
+{
+	const EventInfo* ei = this->get_IoEventInfo(fd);
+	if (ei != NULL && (*ei) == event) {
+		return true;
+	}
+	return false;
+}
+
 void IoEvent::del_ioEventInfo(unsigned int fd) {
+	logs(Logger::DEBUG, "del io event info(%u)", fd);
 	IoEvent::IoEventMapType::iterator it = this->eventMap.find(fd);
 	if (it == this->eventMap.end()) {
 		logs(Logger::ERR, "not found fd(%d) in event map", fd);

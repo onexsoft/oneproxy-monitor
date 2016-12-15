@@ -39,30 +39,36 @@
 #include <unistd.h>
 
 bool ConnectManager::stop = false;
-OneproxyServer ConnectManager::oneproxyServer;
+AcceptThreadManager ConnectManager::acceptThreadManager;
+MutexLock ConnectManager::mutexLock;
 
 ConnectManager::ConnectManager(int threadNum):
-	httpServer(config()->get_httpServerAddr(), config()->get_httpServerPort(), std::string("httpserver")),
 	vipThread(config()->get_vipIfName(), config()->get_vipAddress(), std::string("vipthread")),
+	httpServer(config()->get_httpServerAddr(), config()->get_httpServerPort(), std::string("httpserver")),
 	assistThread(this)
 {
-	ConnectManager::oneproxyServer.set_connectManager(this);
-
 	int i = 0;
 	this->stop = false;
 	this->threadNum = threadNum;
 	for (i = 1; i <= this->threadNum; ++i) {
 		ClientThread *ct = new ClientThread(this, Tool::args2string("workThread:%d", i));
 		this->threadMap[ct->get_threadId()] = ct;
-		this->runningTaskQueue[ct->get_threadId()] = std::map<int, NetworkSocket*>();
 	}
+	acceptThreadManager.start(config()->get_acceptThreadNum(), this,
+			config()->get_oneproxyAddr(), config()->get_oneproxyPortSet());
 }
 
 ConnectManager::~ConnectManager()
 {
-	for (int i = 0; i < this->threadNum; ++i) {
-		delete this->threadMap[i];
-		this->threadMap[i] = NULL;
+	assistThread.stop();
+	httpServer.stop();
+	ThreadMapType::iterator it = this->threadMap.begin();
+	for (; it != this->threadMap.end(); ++it) {
+		ClientThread* ct = (ClientThread*)((*it).second);
+		if (ct->get_stop() == false) {
+			ct->set_stop();
+		}
+		delete ct;
 	}
 
 	while(taskQueue.size() > 0) {
@@ -78,7 +84,35 @@ void ConnectManager::add_task(NetworkSocket* clientSocket)
 	mutexLock.lock();
 	this->taskQueue.push(clientSocket);
 	mutexLock.unlock();
-	record()->record_acceptClientConn();
+}
+
+MutexLock* ConnectManager::get_mutexLock()
+{
+	return &mutexLock;
+}
+
+ClientThread* ConnectManager::get_minTaskThread()
+{
+	ClientThread* thread = NULL;
+	unsigned int minTask = -1;
+	unsigned int sumTask = 0;
+	ThreadMapType::iterator it = this->threadMap.begin();
+	for (; it != this->threadMap.end(); ++it) {
+		ClientThread* ct = (ClientThread*)((*it).second);
+		sumTask += ct->get_threadTaskNum();
+		if (minTask == (unsigned int)-1) {
+			thread = ct;
+			minTask = ct->get_threadTaskNum();
+		} else if (ct->get_threadTaskNum() < minTask) {
+			thread = ct;
+			minTask = ct->get_threadTaskNum();
+		}
+	}
+
+	if (sumTask > config()->get_maxConnectNum()) {
+		return NULL;
+	}
+	return thread;
 }
 
 int ConnectManager::get_taskSize()
@@ -86,150 +120,62 @@ int ConnectManager::get_taskSize()
 	return this->taskQueue.size();
 }
 
-NetworkSocket* ConnectManager::get_task()
+unsigned int ConnectManager::get_allThreadTaskSize()
 {
-	NetworkSocket* ns = NULL;
-	mutexLock.lock();
-	if (this->taskQueue.size() > 0) {
-		ns = this->taskQueue.front();
-		this->taskQueue.pop();
-		record()->record_startHandingConn();
-	}
-	mutexLock.unlock();
-	return ns;
-}
-
-MutexLock* ConnectManager::get_mutexLock()
-{
-	return &this->mutexLock;
-}
-
-void ConnectManager::set_stop()
-{
-	assistThread.stop();
-	httpServer.stop();
+	unsigned int sumTask = 0;
 	ThreadMapType::iterator it = this->threadMap.begin();
 	for (; it != this->threadMap.end(); ++it) {
-		ClientThread * ct = (ClientThread*)it->second;
-		ct->set_stop();
+		ClientThread* ct = (ClientThread*)((*it).second);
+		sumTask += ct->get_threadTaskNum();
 	}
-
-	ConnectManager::oneproxyServer.set_stop();
-}
-
-NetworkSocket* ConnectManager::find_runningTask(u_uint64 threadId, int fd)
-{
-	NetworkSocket *ns = NULL;
-
-	ThreadTaskQueue::iterator it = this->runningTaskQueue.find(threadId);
-	if (it == this->runningTaskQueue.end()) {
-		return ns;
-	}
-
-	FdNetworkSocketMap::iterator tit = it->second.find(fd);
-	if (tit == it->second.end()) {
-		return ns;
-	}
-
-	ns = tit->second;
-	return ns;
-}
-
-int ConnectManager::add_runningTask(u_uint64 threadId, NetworkSocket* ns)
-{
-	NetworkSocket* tns = find_runningTask(threadId, ns->get_fd());
-	if (tns != NULL) {
-		logs(Logger::ERR, "task(fd:%d) always in thread(%llu) running queue", ns->get_fd(), threadId);
-		return -1;
-	}
-	this->runningTaskQueueMutexLock.lock();
-	(this->runningTaskQueue[threadId])[ns->get_fd()] = ns;
-	this->runningTaskQueueMutexLock.unlock();
-
-	return 0;
-}
-
-void ConnectManager::finished_task(u_uint64 threadId, NetworkSocket *ns)
-{
-	logs(Logger::INFO, "thread(%lld) finished task fd(%d)", threadId, ns->get_fd());
-	ThreadTaskQueue::iterator it = this->runningTaskQueue.find(threadId);
-	if (it == this->runningTaskQueue.end()) {
-		logs(Logger::ERR, "no thread(%lld) in runningTaskQueue", threadId);
-		return;
-	}
-
-	FdNetworkSocketMap::iterator tit = it->second.find(ns->get_fd());
-	if (tit == it->second.end()) {
-		logs(Logger::ERR, "no fd(%d) in thread(%lld) runningTaskQueue", ns->get_fd(), threadId);
-		return;
-	}
-	this->runningTaskQueueMutexLock.lock();
-	it->second.erase(tit);
-	this->runningTaskQueueMutexLock.unlock();
-
-	logs(Logger::DEBUG, "runningTaskQueue.size: %d", it->second.size());
-	record()->record_closeClientConn();
-}
-
-u_uint64 ConnectManager::get_clientThread()
-{
-	ThreadTaskQueue::iterator it = runningTaskQueue.begin();
-	u_uint64 resultThread = it->first;
-	unsigned int leastTask = it->second.size();
-	for (; it != runningTaskQueue.end(); ++it) {
-		if (it->second.size() < leastTask) {
-			resultThread = it->first;
-			leastTask = it->second.size();
-		}
-	}
-	return resultThread;
+	return sumTask;
 }
 
 void ConnectManager::alloc_task()
 {
-	if (get_runningTaskQueueSize() >= config()->get_maxConnectNum())
+	if (this->get_taskSize() <= 0)
 		return;
 
-	logs(Logger::INFO, "taskQueue: %d, runningTaskQueue.size: %d",
-			this->taskQueue.size(), get_runningTaskQueueSize());
-	NetworkSocket* ns = this->get_task();
-	if (ns == NULL)
-		return;
+	unsigned int numPerThread = (unsigned int)(config()->get_maxConnectNum() / this->threadMap.size());
+	ThreadMapType::iterator it = this->threadMap.begin();
+	for (; it != this->threadMap.end(); ++it) {
+		ClientThread* ct = (ClientThread*)((*it).second);
+		while(ct->get_threadTaskNum() < numPerThread) {
+			if (this->get_taskSize() <= 0)
+				return;
 
-	u_uint64 leastTaskThread = this->get_clientThread();
-	ClientThread* ct = (ClientThread*)this->threadMap[leastTaskThread];
-	if (ct->add_task(ns)) {//增加任务到客户线程中失败。
-		this->add_task(ns);//重新增加到等待队列中。
-		return;
+			mutexLock.lock();
+			if (this->get_taskSize() > 0) {
+				NetworkSocket* ns = this->taskQueue.front();
+				this->taskQueue.pop();
+				ct->add_task2Queue(ns);
+			}
+			mutexLock.unlock();
+		}
 	}
 
-	if (this->add_runningTask(leastTaskThread, ns)) {
-		logs(Logger::ERR, "add running task error, close fd(%d)", ns->get_fd());
-		delete ns;
-		return;
-	}
-}
+	while(this->taskQueue.size()) {
+		ClientThread* ct = this->get_minTaskThread();
+		if (ct == NULL)
+			return;
 
-unsigned int ConnectManager::get_runningTaskQueueSize()
-{
-	unsigned int size = 0;
-	ConnectManager::ThreadTaskQueue::iterator it = this->runningTaskQueue.begin();
-	for (; it != this->runningTaskQueue.end(); ++it) {
-		size += it->second.size();
+		NetworkSocket * ns = NULL;
+		mutexLock.lock();
+		if (this->taskQueue.size() > 0) {
+			ns = this->taskQueue.front();
+			this->taskQueue.pop();
+		}
+		mutexLock.unlock();
+
+		if (ns != NULL) {
+			ct->add_task2Queue(ns);
+		}
 	}
-	return size;
 }
 
 void ConnectManager::start()
 {
 	SystemApi::system_setThreadName("mainThread");
-	ConnectManager::oneproxyServer.set_tcpServer(config()->get_oneproxyAddr(), config()->get_oneproxyPortSet());
-	if (ConnectManager::oneproxyServer.create_tcpServer()) {
-		logs(Logger::ERR, "create tcp server error");
-		this->set_stop();
-		return;
-	}
-
 	//信号处理函数
 	signal(SIGTERM, ConnectManager::handle_signal);
 	signal(SIGINT, ConnectManager::handle_signal);
@@ -257,24 +203,15 @@ void ConnectManager::start()
 
 	logs(Logger::ERR, "start to connect  manager...");
 	while(!ConnectManager::stop || (this->get_taskSize() > 0)) {
-		if (this->get_taskSize() > 0) {
+		if (this->get_taskSize() > 0
+				&& this->get_allThreadTaskSize() < config()->get_maxConnectNum()) {
 			this->alloc_task();
-			ConnectManager::oneproxyServer.run_server(0);
 		} else {
-			if (ConnectManager::oneproxyServer.get_stop()) {
-				SystemApi::system_sleep(500);
-			} else {
-				ConnectManager::oneproxyServer.run_server(500);
-			}
+			mutexLock.lock();
+			mutexLock.wait_mutexCond();
+			mutexLock.unlock();
 		}
 	}
-
-	//wait running conneciton finished.
-	while(this->get_runningTaskQueueSize()) {
-		SystemApi::system_sleep(500);
-	}
-
-	this->set_stop();
 
 	//6. unlink pid file
 	if (config()->get_pidFilePath().size()) {
@@ -285,7 +222,10 @@ void ConnectManager::start()
 void ConnectManager::handle_signal(int sig)
 {
 	logs(Logger::ERR, "start to logout...");
-	ConnectManager::oneproxyServer.stop_tcpServer();
 	ConnectManager::stop = true;
+	acceptThreadManager.stop_accept();
+	mutexLock.lock();
+	mutexLock.signal_mutexCond();
+	mutexLock.unlock();
 	return ;
 }

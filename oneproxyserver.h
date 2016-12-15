@@ -31,43 +31,30 @@
 
 #include <iostream>
 #include <string>
+#include <list>
 
 #include "define.h"
 #include "tcpserver.h"
+#include "thread.h"
+#include "tool.h"
 
 class ConnectManager;
-class OneproxyServer:public TcpServer{
+class OneproxyServer:public TcpServer, public Thread{
 public:
 
-	OneproxyServer() {
+	OneproxyServer(std::string threadName = std::string("accept_thread"))
+		:Thread(thread_type_accept, threadName) {
 		this->connectManager = NULL;
 		this->stop = false;
+		this->startSuccess = false;
 	}
 
-	OneproxyServer(ConnectManager* connectManager) {
-		this->connectManager = connectManager;
-		this->stop = false;
-	}
-
-	OneproxyServer(ConnectManager* connectManager, std::string serverAddr,  int serverPort)
-		:TcpServer(serverAddr, serverPort)
-	{
-		this->connectManager = connectManager;
-		this->stop = false;
-	}
-
-	OneproxyServer(std::string serverAddr, int serverPort)
-		:TcpServer(serverAddr, serverPort)
-	{
-		this->connectManager = NULL;
-		this->stop = false;
+	bool get_stop() {
+		return this->stop;
 	}
 
 	void set_stop() {
 		this->stop = true;
-	}
-	bool get_stop() {
-		return this->stop;
 	}
 
 	ConnectManager *get_connectManager() {
@@ -79,10 +66,58 @@ public:
 	}
 
 	int start_server();
+	void start_success(){this->startSuccess = true;}
+	bool get_startSuccess(){return this->startSuccess;}
+	static thread_start_func(start);
+
 	virtual void accept_clientRequest(NetworkSocket *clientSocket);
 private:
 	ConnectManager *connectManager;
 	bool stop;
+	volatile bool startSuccess;
 };
 
+class AcceptThreadManager{
+public:
+	AcceptThreadManager(){}
+
+	void start(unsigned int threadNum, ConnectManager* connManager,
+			std::string serverAddr, std::set<unsigned int>& portList) {
+		for (unsigned int i = 0; i < threadNum; ++i) {
+			OneproxyServer* ops = new OneproxyServer(Tool::args2string("acceptThread:%d", i));
+			ops->set_connectManager(connManager);
+			ops->set_tcpServer(serverAddr, portList);
+			ops->startThread(OneproxyServer::start, ops);
+			//wait thread start. for update config online
+			while(ops->get_startSuccess() == false) {SystemApi::system_sleep(10);}
+			this->acceptThreadList.push_back(ops);
+		}
+	}
+	~AcceptThreadManager() {
+		this->stop_thread();
+	}
+
+	void stop_thread() {
+		std::list<OneproxyServer*>::iterator it = this->acceptThreadList.begin();
+		for (; it != this->acceptThreadList.end();) {
+			OneproxyServer* ops = *it;
+			it = this->acceptThreadList.erase(it);
+			if (ops->get_stop() == false) {
+				ops->set_stop();
+			}
+			ops->joinThread();
+			delete ops;
+		}
+	}
+
+	void stop_accept() {
+		std::list<OneproxyServer*>::iterator it = this->acceptThreadList.begin();
+		for(; it != this->acceptThreadList.end(); ++it) {
+			OneproxyServer* ops = *it;
+			ops->stop_tcpServer();
+		}
+	}
+private:
+	std::list<OneproxyServer*> acceptThreadList;
+};
 #endif /* ONEPROXYSERVER_H_ */

@@ -51,6 +51,7 @@ TcpServer::~TcpServer()
 {
 	if (this->ioEvent != NULL) {
 		this->ioEvent->destory_instance();
+		this->ioEvent = NULL;
 	}
 }
 
@@ -91,12 +92,12 @@ void TcpServer::stop_tcpServer()
 	for (; it != this->servSct.end(); ++it) {
 		it->closeSocket(it->get_fd());
 	}
-	this->servSct.clear();
-	this->fdPortMap.clear();
-	if (this->ioEvent != NULL) {
-		this->ioEvent->destory_instance();
-		this->ioEvent = NULL;
-	}
+//	this->servSct.clear();
+//	this->fdPortMap.clear();
+//	if (this->ioEvent != NULL) {
+//		this->ioEvent->destory_instance();
+//		this->ioEvent = NULL;
+//	}
 }
 
 int TcpServer::create_servers()
@@ -210,5 +211,3 @@ void TcpServer::accept_connect(unsigned int fd, unsigned int events, void *args)
 	}
 	ts->accept_clientRequest(clientSocket);
 }
-
-

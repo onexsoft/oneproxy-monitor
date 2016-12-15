@@ -59,6 +59,7 @@ typedef enum {
 	thread_type_manager,
 	thread_type_httpserver,
 	thread_type_vip,
+	thread_type_accept,
 } ThreadType;
 
 class Thread{
@@ -66,11 +67,13 @@ public:
 	Thread(ThreadType type, std::string threadName);
 	~Thread();
 
+	void joinThread();
 	int startThread(ThreadFunc func, void* args);
 
 	u_uint64 get_threadId();
 	ThreadType get_threadType();
 	std::string get_threadName();
+	void block_threadSignal();
 private:
 	static thread_start_func(start);
 private:

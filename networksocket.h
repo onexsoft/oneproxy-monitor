@@ -107,13 +107,13 @@ public:
 			this->m_attachData.pointer_desFunc = NULL;
 		}
 		if (m_fd) {
-			logs(Logger::DEBUG, "close fd(%d)", m_fd);
 			closeSocket(m_fd);
 			m_fd = 0;
 		}
 
 		this->dec_dataBaseConnect();
 	}
+
 	static void destroy_networkSocket(void* ns) {
 		NetworkSocket* tns = (NetworkSocket*)ns;
 		if (tns != NULL) {
@@ -133,6 +133,7 @@ public:
 	void set_addr(int af, unsigned int port);
 	void set_portAndAddr(unsigned int port, std::string address);
 
+	int read_dataLoop();
 	int read_data();
 	int read_dataonBlock();
 	int write_data(StringBuf& buf);
@@ -142,7 +143,6 @@ public:
 	void clear_sendData();
 
 	//add database connect count
-	void inc_dataBaseConnect();
 	void dec_dataBaseConnect();
 private:
 	declare_class_member(unsigned int, fd)
@@ -164,6 +164,9 @@ private:
 
 	//当前socket所属的数据库
 	declare_class_member(DataBase*, dataBase);
+
+	//save the client sockaddr
+	declare_class_member_co(struct sockaddr, sockaddr);
 };
 
 #endif /* NETWORKSOCKET_H_ */

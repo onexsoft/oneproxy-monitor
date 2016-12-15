@@ -125,8 +125,8 @@ int DataBaseGroup::set_dataBaseGroupVec(std::vector<DataBase>& dbVec,
 	}
 	return 0;
 }
-void Config::update_globalSecondTime() {
-	this->m_globalSecondTime = SystemApi::system_millisecond() / 1000;
+void Config::update_globalTime() {
+	this->m_globalMillisecondTime = SystemApi::system_millisecond();
 }
 Config::Config()
 {
@@ -152,6 +152,7 @@ Config::Config()
 	add_oneproxyConfig("poolconncheckactivetime", "5", &Config::cvtInt, &Config::set_poolConnCheckActiveTime);
 	add_oneproxyConfig("poolconntimeoutreleasetime", "60", &Config::cvtInt, &Config::set_poolConnTimeoutReleaseTime);
 	add_oneproxyConfig("connecttimeout", "86400", &Config::cvtInt, &Config::set_connectTimeOut);//one day,unit: second.
+	add_oneproxyConfig("acceptthreadnum", "2", &Config::cvtInt, &Config::set_acceptThreadNum);
 #undef add_oneproxyConfig
 
 #define add_dbConfig(db, key, defaultv, cvtf, setf) add_config(db, key, defaultv, (CVTFunc)cvtf, (SetFunc)setf)
@@ -179,7 +180,7 @@ Config::Config()
 #undef add_dbConfig
 
 	//init global time
-	this->update_globalSecondTime();
+	this->update_globalTime();
 }
 
 void Config::add_config(std::vector<ConfigKeyValue>& db, std::string key, std::string dvalue, CVTFunc cf, SetFunc sf)
@@ -262,6 +263,7 @@ void Config::print_config()
 	logs(Logger::INFO, "clientPassword: %s", this->m_clientPassword.c_str());
 	logs(Logger::INFO, "poolConnCheckActiveTime: %d", this->m_poolConnCheckActiveTime);
 	logs(Logger::INFO, "poolConnTimeoutReleaseTime: %d", this->m_poolConnTimeoutReleaseTime);
+	logs(Logger::INFO, "acceptThreadNum: %d", this->m_acceptThreadNum);
 
 	std::vector<DataBase>::iterator it = dbVector.begin();
 	for (; it != dbVector.end(); ++it) {
@@ -308,23 +310,13 @@ void Config::handle_ports()
 
 int Config::handle_config()
 {
-	unsigned int limitFiles = 0;
-	if (SystemApi::system_limitFileNum(limitFiles)) {
-		logs(Logger::ERR, "get limitFile error");
-		return -1;
-	}
-	unsigned int tlf = limitFiles /2;
-
-	//预留20个文件描述给http server和监听套接字等使用
-	if (tlf < this->get_maxConnectNum() && tlf > 20) {
-		this->set_maxConnectNum(tlf - 20);
-	} else if (tlf < 20) {
-		this->set_maxConnectNum(0);
-	}
-
 	unsigned int cpuNum = SystemApi::system_cpus();
 	if (this->get_threadNum() <= 0 && cpuNum > 0) {
 		this->set_threadNum(cpuNum);
+	}
+
+	if (this->get_acceptThreadNum() <= 0 || cpuNum <= 1) {
+		this->set_acceptThreadNum(1);
 	}
 
 	//处理多个端口号的情况。
@@ -758,6 +750,16 @@ DataBaseGroup* Config::get_dataBaseGroup(unsigned int index)
 unsigned int Config::get_dataBaseGroupSize()
 {
 	return this->dbGroupVector.size();
+}
+
+u_uint64 Config::get_globalSecondTime()
+{
+	return this->m_globalMillisecondTime/1000;
+}
+
+u_uint64 Config::get_globalMillisecondTime()
+{
+	return this->m_globalMillisecondTime;
 }
 
 IMPLEMENT_CVTSTRING_FUNC(Config, cvtString)

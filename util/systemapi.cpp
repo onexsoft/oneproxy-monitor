@@ -29,6 +29,7 @@
 #include "memmanager.h"
 #include "systemapi.h"
 #include "logger.h"
+#include "mutexlock.h"
 
 #include <errno.h>
 #include <string.h>
@@ -211,7 +212,7 @@ u_uint64 SystemApi::system_millisecond()
 	u_uint64 result = 0;
 #ifdef linux
 	struct timeval t_start;
-	gettimeofday(&t_start, NULL);
+	gettimeofday(&t_start, NULL);//when use gperftool, maybe core.
 	result = ((u_uint64)t_start.tv_sec) * 1000 + ((u_uint64)t_start.tv_usec) / 1000;
 #else
 	result = (u_uint64)GetTickCount();
@@ -463,5 +464,44 @@ int SystemApi::system_ntop(int af, const void *src, char *dst, socklen_t cnt)
 void SystemApi::system_setThreadName(std::string name) {
 #ifdef linux
 	prctl(PR_SET_NAME, name.c_str());
+#endif
+}
+
+int SystemApi::system_setFDNum(unsigned int max_files_number) {
+#ifdef _WIN32
+	int max_files_number_set;
+
+	max_files_number_set = _setmaxstdio(max_files_number);
+
+	if (-1 == max_files_number_set) {
+		logs(Logger::ERR, "set max files number error");
+		return -1;
+	} else if (max_files_number_set != max_files_number) {
+		logs(Logger::ERR, "set max files number error");
+		return -1;
+	}
+	return 0;
+#else
+	struct rlimit max_files_rlimit;
+	rlim_t soft_limit;
+	rlim_t hard_limit;
+
+	if (-1 == getrlimit(RLIMIT_NOFILE, &max_files_rlimit)) {
+		return -1;
+	}
+
+	soft_limit = max_files_rlimit.rlim_cur;
+	hard_limit = max_files_rlimit.rlim_max;
+
+	max_files_rlimit.rlim_cur = max_files_number;
+	if (hard_limit < max_files_number) { /* raise the hard-limit too in case it is smaller than the soft-limit, otherwise we get a EINVAL */
+		max_files_rlimit.rlim_max = max_files_number;
+	}
+
+	if (-1 == setrlimit(RLIMIT_NOFILE, &max_files_rlimit)) {
+		return -1;
+	}
+
+	return 0;
 #endif
 }

@@ -103,6 +103,8 @@ public:
 	static int system_inetPton(int af, const char* src, void* dst);
 	static int system_ntop(int af, const void *src, char *dst, socklen_t cnt);
 	static void system_setThreadName(std::string name);
+	//设置文件描述符限制
+	static int system_setFDNum(unsigned int max_files_number);
 };
 
 #endif /* UTIL_SYSTEMAPI_H_ */

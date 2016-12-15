@@ -36,13 +36,23 @@
 #include "pidmanager.h"
 
 int main(int argc, char* argv[]) {
-	//1. 处理参数
+	//处理参数
 	if (config()->handle_args(argc, argv)) {
 		logs(Logger::FATAL, "args error");
 		return -1;
 	}
 
-	//2. 根据需要keepalive
+	//set file descriptor number
+	{
+		//client, master, slave.
+		unsigned int max_file_descriptor = config()->get_maxConnectNum() * 3 + 1024;
+		if (SystemApi::system_setFDNum(max_file_descriptor)) {
+			logs(Logger::FATAL, "set fd number error");
+			return -1;
+		}
+	}
+
+	//根据需要keepalive
 	if (config()->get_keepAlive()) {
 		KeepAlive keepAlive;
 		int child_exit_status = EXIT_SUCCESS;
@@ -53,19 +63,18 @@ int main(int argc, char* argv[]) {
 		//else we are the child, go on
 	}
 
-	//3. 初始化网络环境
+	//初始化网络环境
 	uif(SystemApi::init_networkEnv()) {
 		logs(Logger::ERR, "init network environment error, exit(-1)");
 		return -1;
 	}
 
-	//4. start to handle client data.
+	//start to handle client data.
 	ConnectManager connectManager(config()->get_threadNum());
 	connectManager.start();
 
-	//5. 卸载网络环境
+	//卸载网络环境
 	SystemApi::clear_networkEnv();
-
 	logs(Logger::ERR, "success finished ...");
 
 	return 0;

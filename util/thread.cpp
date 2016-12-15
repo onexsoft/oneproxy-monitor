@@ -28,12 +28,7 @@
 
 #include "thread.h"
 #include "systemapi.h"
-
-//Thread::Thread()
-//{
-//	this->threadId = 0;
-//	this->type = thread_type_init;
-//}
+#include "signal.h"
 
 Thread::Thread(ThreadType type, std::string tname)
 	:threadName(tname)
@@ -46,12 +41,15 @@ Thread::Thread(ThreadType type, std::string tname)
 
 Thread::~Thread()
 {
+}
+
+void Thread::joinThread() {
 	if (this->threadId != 0) {
-#ifdef WIN32
-		WaitForSingleObject(this->threadId, INFINITE);
-#else
-		pthread_join(this->threadId, NULL);
-#endif
+	#ifdef WIN32
+			WaitForSingleObject(this->threadId, INFINITE);
+	#else
+			pthread_join(this->threadId, NULL);
+	#endif
 	}
 }
 
@@ -84,12 +82,31 @@ std::string Thread::get_threadName()
 	return this->threadName;
 }
 
+void Thread::block_threadSignal()
+{
+#ifndef __WIN32
+	sigset_t set;
+	sigemptyset(&set);
+	sigaddset(&set, SIGQUIT);
+	sigaddset(&set, SIGUSR1);
+	sigaddset(&set, SIGUSR2);
+	sigaddset(&set, SIGINT);
+	sigaddset(&set, SIGTERM);
+
+	if(pthread_sigmask(SIG_UNBLOCK, &set, NULL)) {
+		logs(Logger::FATAL, "sigmask error");
+	}
+#endif
+}
+
 thread_start_func(Thread::start)
 {
 	Thread* th = (Thread*)args;
 
 	//1. set username
 	SystemApi::system_setThreadName(th->threadName);
+
+	th->block_threadSignal();
 
 	return th->userFunc(th->userFuncArgs);
 }

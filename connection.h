@@ -170,6 +170,12 @@ typedef struct _socket_set_t{
 
 typedef struct _session_data_t{
 	HandleManager preparedCursorManager;
+	stats::SqlInfo* sqlInfo;
+	stats::ClientQueryInfo* clientInfo;
+	_session_data_t() {
+		this->sqlInfo = NULL;
+		this->clientInfo = NULL;
+	}
 } SessionData;
 
 class ProtocolBase;

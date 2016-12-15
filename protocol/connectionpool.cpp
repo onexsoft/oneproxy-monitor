@@ -33,7 +33,7 @@ ConnectionPool::ConnectionPool()
 {
 	this->idle_timeout_check = 1 * 1000;
 	this->idle_timeout_release = 60 * 1000;
-	this->current_time = SystemApi::system_millisecond();
+	this->current_time = config()->get_globalMillisecondTime();
 	this->check_active = false;
 }
 
@@ -167,7 +167,7 @@ void ConnectionPool::release_backendSocket(NetworkSocket* socket) {
 }
 
 void ConnectionPool::check_connectActive() {
-	this->current_time = SystemApi::system_millisecond();
+	this->current_time = config()->get_globalMillisecondTime();
 	mutexLock.lock();
 	std::map<ConnPoolKey, SockInfoDeque>::iterator it = this->idle_sock.begin();
 	for (; it != this->idle_sock.end(); ++it) {
@@ -205,7 +205,7 @@ void ConnectionPool::check_connectActive() {
 		}
 	}
 	mutexLock.unlock();
-	this->current_time = SystemApi::system_millisecond();
+	this->current_time = config()->get_globalMillisecondTime();
 }
 
 void ConnectionPool::set_idleTimeoutCheck(int second)
