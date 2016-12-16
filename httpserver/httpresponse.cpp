@@ -1140,7 +1140,8 @@ void HttpResponse::response_task(Http& http)
 		init_tableTitle("All</br>Task", ""),
 		init_tableTitle("Current</br>Task", ""),
 		init_tableTitle("Doing</br>Task", ""),
-		init_tableTitle("Wait</br>Task", ""),
+		init_tableTitle("Thread</br>TaskWait", ""),
+		init_tableTitle("Global</br>TaskWait", ""),
 		init_tableTitle("Close</br>Task", ""),
 		init_tableTitle_NULL()
 	};
@@ -1157,6 +1158,7 @@ void HttpResponse::response_task(Http& http)
 	http.outputBuf.appendFormat("<td>%lld</td>", record()->sum_currentClientConn);
 	http.outputBuf.appendFormat("<td>%lld</td>", record()->sum_handingClientConn);
 	http.outputBuf.appendFormat("<td>%lld</td>", record()->sum_waitClientConn);
+	http.outputBuf.appendFormat("<td>%lld</td>", record()->sum_waitInGlobalQueue);
 	http.outputBuf.appendFormat("<td>%lld</td>", record()->sum_closeClientConn);
 	http.outputBuf.append("</tr>");
 	http.outputBuf.append("</table>");
@@ -1190,7 +1192,7 @@ void HttpResponse::response_taskThread(Http& http)
 		if (it->second.is_show() == false)
 			continue;
 		http.outputBuf.append("<tr>");
-		http.outputBuf.appendFormat("<td>%lld</td>", it->second.thread_id);
+		http.outputBuf.appendFormat("<td>0x%x</td>", it->second.thread_id);
 		http.outputBuf.appendFormat("<td>%lld</td>", it->second.sum_allClientConn);
 		http.outputBuf.appendFormat("<td>%lld</td>", it->second.sum_handingClientConn);
 		http.outputBuf.appendFormat("<td>%lld</td>", it->second.sum_failClientConn);

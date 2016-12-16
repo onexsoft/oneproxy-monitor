@@ -61,6 +61,8 @@ public:
 	void record_acceptClientConn();
 	void record_startHandingConn();
 	void record_closeClientConn();
+	void record_clientConn2GlobalQueue();
+	void record_outGlobalQueue();
 	void record_threadRecvConn(u_uint64 threadId);
 	void record_threadStartHandingConn(u_uint64 threadId);
 	void record_threadFinishedConn(u_uint64 threadId);
@@ -108,6 +110,7 @@ private:
 		this->sum_handingClientConn = 0;
 		this->sum_waitClientConn = 0;
 		this->sum_closeClientConn = 0;
+		this->sum_waitInGlobalQueue = 0;
 		this->record_print_time_interval = 5;
 		this->bakRecord = NULL;
 		this->bakRecordStartTime = 0;
@@ -121,6 +124,7 @@ public:
 	u_uint64 sum_handingClientConn;//正在处理的客户端连接
 	u_uint64 sum_waitClientConn;//正在等待的客户端连接
 	u_uint64 sum_closeClientConn;//从系统启动到目前关闭的客户端连接
+	u_uint64 sum_waitInGlobalQueue;//统计全局队列中的任务数
 	USpinLock clientConnLock;
 
 	SqlInfoMap sqlInfoMap;//sql语句查询的统计情况

@@ -202,6 +202,7 @@ class Config: public ConfigBase{
 	declare_class_member(int, poolConnTimeoutReleaseTime)
 	declare_class_member(int, connectTimeOut)//when connect timeout, oneproxy will close it.
 	declare_class_member(int, acceptThreadNum)
+	declare_class_member(int, listenBackLog)
 
 	//global time, update by one second or poll callback.
 	volatile u_uint64 m_globalMillisecondTime;

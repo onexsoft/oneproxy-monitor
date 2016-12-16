@@ -28,7 +28,6 @@
 
 #include "protocolbase.h"
 #include "connectionpool.h"
-#include "pgprotocol.h"
 
 ProtocolHandleRetVal ProtocolBase::protocol_front(Connection& conn)
 {

@@ -49,6 +49,7 @@ public:
 	IoEvent& get_ioEvent() {return *ioEvent;}
 	void set_tcpServer(std::string serverAddr, std::set<unsigned int>& portList);
 	void stop_tcpServer();//停止accept前端的连接，并且关闭ioevent.
+	void set_listenBackLog(int backLog);
 private:
 	int create_servers();
 	int create_listenSocket(NetworkSocket& ns, int af, const struct sockaddr *sa, int salen);
@@ -59,6 +60,7 @@ private:
 	std::vector<NetworkSocket> servSct;
 	std::map<unsigned int, unsigned int> fdPortMap;
 	IoEvent *ioEvent;
+	int listenBackLog;
 };
 
 #endif /* TCPSERVER_H_ */

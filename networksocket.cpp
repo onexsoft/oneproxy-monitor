@@ -345,7 +345,7 @@ int NetworkSocket::read_dataLoop()
 
 int NetworkSocket::read_data()
 {
-//	return this->read_dataLoop();
+	return this->read_dataLoop();
 
 	unsigned int dataLen = 0;
 	if (system_ioctl(this->m_fd, FIONREAD, (unsigned long int*)&dataLen)) {//fd maybe closed
@@ -428,7 +428,7 @@ int NetworkSocket::write_data(StringBuf& buf)
 				return 1;//retry
 			}
 #endif
-			logs_buf_force("xxx write_data", (char*)(buf.addr() + buf.get_offset()), buf.get_remailLength());
+//			logs_buf_force("xxx write_data", (char*)(buf.addr() + buf.get_offset()), buf.get_remailLength());
 			logs(Logger::ERR, "send data error, fd(%d), errno: %d, err(%s)",
 					this->m_fd, errno, SystemApi::system_strerror(errno));
 			return -1;

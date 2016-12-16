@@ -55,7 +55,8 @@ ConnectManager::ConnectManager(int threadNum):
 		this->threadMap[ct->get_threadId()] = ct;
 	}
 	acceptThreadManager.start(config()->get_acceptThreadNum(), this,
-			config()->get_oneproxyAddr(), config()->get_oneproxyPortSet());
+			config()->get_oneproxyAddr(), config()->get_oneproxyPortSet(),
+			config()->get_listenBackLog());
 }
 
 ConnectManager::~ConnectManager()
@@ -83,7 +84,9 @@ void ConnectManager::add_task(NetworkSocket* clientSocket)
 	logs(Logger::DEBUG, "add_task: %d", clientSocket->get_fd());
 	mutexLock.lock();
 	this->taskQueue.push(clientSocket);
+	mutexLock.signal_mutexCond();
 	mutexLock.unlock();
+	record()->record_clientConn2GlobalQueue();
 }
 
 MutexLock* ConnectManager::get_mutexLock()
@@ -149,6 +152,7 @@ void ConnectManager::alloc_task()
 				NetworkSocket* ns = this->taskQueue.front();
 				this->taskQueue.pop();
 				ct->add_task2Queue(ns);
+				record()->record_outGlobalQueue();
 			}
 			mutexLock.unlock();
 		}
@@ -169,6 +173,7 @@ void ConnectManager::alloc_task()
 
 		if (ns != NULL) {
 			ct->add_task2Queue(ns);
+			record()->record_outGlobalQueue();
 		}
 	}
 }

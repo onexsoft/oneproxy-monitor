@@ -153,6 +153,7 @@ Config::Config()
 	add_oneproxyConfig("poolconntimeoutreleasetime", "60", &Config::cvtInt, &Config::set_poolConnTimeoutReleaseTime);
 	add_oneproxyConfig("connecttimeout", "86400", &Config::cvtInt, &Config::set_connectTimeOut);//one day,unit: second.
 	add_oneproxyConfig("acceptthreadnum", "2", &Config::cvtInt, &Config::set_acceptThreadNum);
+	add_oneproxyConfig("listenbacklog", "1000", &Config::cvtInt, &Config::set_listenBackLog);
 #undef add_oneproxyConfig
 
 #define add_dbConfig(db, key, defaultv, cvtf, setf) add_config(db, key, defaultv, (CVTFunc)cvtf, (SetFunc)setf)
@@ -264,6 +265,7 @@ void Config::print_config()
 	logs(Logger::INFO, "poolConnCheckActiveTime: %d", this->m_poolConnCheckActiveTime);
 	logs(Logger::INFO, "poolConnTimeoutReleaseTime: %d", this->m_poolConnTimeoutReleaseTime);
 	logs(Logger::INFO, "acceptThreadNum: %d", this->m_acceptThreadNum);
+	logs(Logger::INFO, "listenbacklog: %d", this->m_listenBackLog);
 
 	std::vector<DataBase>::iterator it = dbVector.begin();
 	for (; it != dbVector.end(); ++it) {
@@ -317,6 +319,10 @@ int Config::handle_config()
 
 	if (this->get_acceptThreadNum() <= 0 || cpuNum <= 1) {
 		this->set_acceptThreadNum(1);
+	}
+
+	if (this->get_listenBackLog() <= 128) {
+		this->set_listenBackLog(128);
 	}
 
 	//处理多个端口号的情况。

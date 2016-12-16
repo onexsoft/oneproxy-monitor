@@ -39,11 +39,13 @@
 TcpServer::TcpServer():
 	ioEvent(IoEvent::get_instance("tcpServer_ioevent"))
 {
+	this->listenBackLog = 128;
 }
 
 TcpServer::TcpServer(std::string serverAddr, unsigned int serverPort):
 	 ioEvent(IoEvent::get_instance("tcpServer_ioevent"))
 {
+	this->listenBackLog = 128;
 	this->servSct.push_back(NetworkSocket(serverAddr, serverPort));
 }
 
@@ -92,12 +94,11 @@ void TcpServer::stop_tcpServer()
 	for (; it != this->servSct.end(); ++it) {
 		it->closeSocket(it->get_fd());
 	}
-//	this->servSct.clear();
-//	this->fdPortMap.clear();
-//	if (this->ioEvent != NULL) {
-//		this->ioEvent->destory_instance();
-//		this->ioEvent = NULL;
-//	}
+}
+
+void TcpServer::set_listenBackLog(int backLog)
+{
+	this->listenBackLog = backLog;
 }
 
 int TcpServer::create_servers()
@@ -156,7 +157,7 @@ int TcpServer::create_listenSocket(NetworkSocket& ns, int af, const struct socka
 		return -1;
 	}
 
-	if (::listen(sfd, cf_listen_backlog) < 0) {
+	if (::listen(sfd, this->listenBackLog) < 0) {
 		int errorno = SystemApi::system_errno();
 		logs(Logger::ERR, "listen error(%d:%s)", errorno, SystemApi::system_strerror(errorno));
 		ns.closeSocket(sfd);

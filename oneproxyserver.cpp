@@ -57,7 +57,6 @@ thread_start_func(OneproxyServer::start)
 		return 0;
 	}
 	os->start_success();
-
 	while(os->get_stop() == false) {
 		os->run_server(500);
 	}

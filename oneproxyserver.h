@@ -82,9 +82,12 @@ public:
 	AcceptThreadManager(){}
 
 	void start(unsigned int threadNum, ConnectManager* connManager,
-			std::string serverAddr, std::set<unsigned int>& portList) {
+			std::string serverAddr, std::set<unsigned int>& portList, int listenBackLog = 128) {
 		for (unsigned int i = 0; i < threadNum; ++i) {
 			OneproxyServer* ops = new OneproxyServer(Tool::args2string("acceptThread:%d", i));
+			if (listenBackLog > 0) {
+				ops->set_listenBackLog(listenBackLog);
+			}
 			ops->set_connectManager(connManager);
 			ops->set_tcpServer(serverAddr, portList);
 			ops->startThread(OneproxyServer::start, ops);

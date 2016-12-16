@@ -282,6 +282,20 @@ void Record::record_closeClientConn()
 	clientConnLock.unlock();
 }
 
+void Record::record_clientConn2GlobalQueue()
+{
+	clientConnLock.lock();
+	this->sum_waitInGlobalQueue ++;
+	clientConnLock.unlock();
+}
+
+void Record::record_outGlobalQueue()
+{
+	clientConnLock.lock();
+	this->sum_waitInGlobalQueue --;
+	clientConnLock.unlock();
+}
+
 void Record::record_threadRecvConn(u_uint64 threadId)
 {
 	this->threadInfoMapMutex.lock();

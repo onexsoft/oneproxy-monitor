@@ -229,6 +229,7 @@ void ClientThread::finished_connection(Connection *con, ConnFinishType type)
 
 void ClientThread::get_serverFailed(Connection *con)
 {
+	logs(Logger::WARNING, "get server failed,fd:%d", con->sock.curclins->get_fd());
 	con->clins()->get_socketRecord().connServerFailed();
 	if (con->clins()->get_socketRecord().get_connServerFailed()
 			>= config()->get_tryConnServerTimes()) {
@@ -580,7 +581,7 @@ void ClientThread::check_connectionTimeout() {
 		}
 	}
 	if (conn != NULL) {
-		logs(Logger::ERR, "timeout close client fd: %d", conn->sock.curclins->get_fd());
+		logs(Logger::WARNING, "timeout close client fd: %d", conn->sock.curclins->get_fd());
 		this->finished_connection(conn, CONN_FINISHED_ERR);
 	}
 }
@@ -640,7 +641,7 @@ thread_start_func(ClientThread::start)
 			ct->ioEvent->run_loopWithTimeout(0);
 			ct->handle_queueData();
 		} else {
-			ct->ioEvent->run_loopWithTimeout(500);
+			ct->ioEvent->run_loopWithTimeout(100);
 		}
 
 		if (cntTime > 0) {
