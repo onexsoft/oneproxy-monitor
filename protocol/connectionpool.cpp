@@ -63,10 +63,10 @@ void ConnectionPool::set_checkActive()
 	this->check_active = true;
 }
 
-NetworkSocket* ConnectionPool::get_backendConnect(std::string dbAddr, int port)
+NetworkSocket* ConnectionPool::get_backendConnect(std::string dbAddr, int port, std::string connArgs)
 {
 	NetworkSocket* ns = NULL;
-
+	logs(Logger::DEBUG, "get backend connecton from pool");
 	mutexLock.lock();
 	do{
 		if (this->idle_sock.size() <= 0)
@@ -75,6 +75,8 @@ NetworkSocket* ConnectionPool::get_backendConnect(std::string dbAddr, int port)
 		ConnPoolKey key;
 		key.dbAddr = dbAddr;
 		key.port = port;
+		key.otherIdentify = connArgs;
+		key.keyHashCode = key.gen_keyHashCode();
 		std::map<ConnPoolKey, SockInfoDeque>::iterator it = this->idle_sock.find(key);
 		if (it == this->idle_sock.end()) {
 			break;
@@ -119,6 +121,8 @@ int ConnectionPool::set_backendConnect(NetworkSocket* socket)
 	ConnPoolKey key;
 	key.dbAddr = socket->get_address();
 	key.port = socket->get_port();
+	key.otherIdentify = socket->connArgsMap2String();
+	key.keyHashCode = key.gen_keyHashCode();
 	SockInfoDeque& sid =  this->idle_sock[key];
 	it->second->start_use_time = this->current_time; //更新被使用的时间
 	sid.push_back(it->second);
@@ -144,6 +148,8 @@ void ConnectionPool::save_backendConnect(NetworkSocket* socket, FreeFunc free_so
 		ConnPoolKey key;
 		key.dbAddr = socket->get_address();
 		key.port = socket->get_port();
+		key.otherIdentify = socket->connArgsMap2String();
+		key.keyHashCode = key.gen_keyHashCode();
 		this->idle_sock[key].push_front(sockInfo);
 	}
 	mutexLock.unlock();

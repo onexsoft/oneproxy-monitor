@@ -59,6 +59,7 @@ typedef enum _protocol_handle_return_value_t{
 	HANDLE_RETURN_SEND_DIRECT,//表示当前处理成功，但是框架不会处理剩下的数据，直接把接收到的数据直接转发到对端
 	HANDLE_RETURN_SEND_TO_CLIENT,//表示把前端缓存中的数据，直接转发给客户端。这种情况是针对在处理过程中修改了数据包，这个数据包是发送到前端的数据。目前保留
 	HANDLE_RETURN_FAILED_CLOSE_CONN,//表示当前的连接已经无法处理，需要把连接关闭掉
+	HANDLE_RETURN_NORMAL_CLOSE_CONN,//前端正常关闭连接
 } ProtocolHandleRetVal;
 
 declare_clsfunc_pointer(ProtocolHandleRetVal, ProtocolBase, BaseFunc, Connection&, StringBuf&)
@@ -161,6 +162,8 @@ protected:
 	static bool check_socketActive(NetworkSocket* ns) {return true;}
 	//把连接增加到pool中
 	virtual void add_socketToPool(NetworkSocket* ns);
+	//把已经使用过的后端连接保存到pool中
+	virtual int set_oldSocketToPool(NetworkSocket* ns);
 	//根据hashcode查找sql语句
 	virtual std::string get_sqlText(unsigned int hashCode);
 };

@@ -309,44 +309,8 @@ void NetworkSocket::set_portAndAddr(unsigned int port, std::string address) {
 	set_address(address);
 }
 
-int NetworkSocket::read_dataLoop()
-{
-	const int t_data_len = 1024;
-	const unsigned int old_length = this->m_recvData.get_length();
-	while(true) {
-		this->m_recvData.reallocMem(this->m_recvData.get_length() + t_data_len);
-		int len = recv(this->m_fd, (char*)(this->m_recvData.addr() + this->m_recvData.length()), t_data_len, 0);
-		if (len >= 0) {
-			this->m_recvData.set_length(this->m_recvData.get_length() + len);
-			if (len == 0 && old_length == this->m_recvData.get_length())
-				return 2;//sock is closed.
-
-			if (len < t_data_len) {//read finished.
-				return 0;
-			}
-		} else {
-			if (this->m_recvData.get_length() > old_length) {//read finished.
-				return 0;
-			} else {
-				errno = SystemApi::system_errno();
-				if (errno == EAGAIN || errno == EINTR) {
-					logs(Logger::ERR, "errno == EAGAIN or errno == EINTR");
-					return 1;
-				} else {
-					logs(Logger::ERR, "recv data from fd(%d) error(%d:%s)",
-							this->m_fd, errno, SystemApi::system_strerror(errno));
-					return -1;
-				}
-			}
-		}
-	}
-	return 0;
-}
-
 int NetworkSocket::read_data()
 {
-	return this->read_dataLoop();
-
 	unsigned int dataLen = 0;
 	if (system_ioctl(this->m_fd, FIONREAD, (unsigned long int*)&dataLen)) {//fd maybe closed
 		logs(Logger::ERR, "fd(%d) ioctl FIONREAD error", this->m_fd);
@@ -354,7 +318,7 @@ int NetworkSocket::read_data()
 	}
 
 	if (dataLen == ((unsigned int)0)) {
-		logs(Logger::INFO, "the socket(%d) is closed", this->m_fd);
+		logs(Logger::DEBUG, "the socket(%d) is closed", this->m_fd);
 		return 2;
 	}
 
@@ -410,7 +374,7 @@ int NetworkSocket::write_data(StringBuf& buf)
 		return 0;
 	}
 
-//	logs_buf("xxx write_data", (char*)(buf.addr() + buf.get_offset()), buf.get_remailLength());
+	logs_buf("xxx write_data", (char*)(buf.addr() + buf.get_offset()), buf.get_remailLength());
 	int len = 0;
 	while(buf.get_remailLength() > 0) {
 //		logs(Logger::ERR, "send data(%d) bytes to client fd(%d)", buf.get_remailLength(), this->m_fd);
@@ -462,9 +426,22 @@ void NetworkSocket::clear_sendData()
 	this->m_sendData.clear();
 }
 
-void NetworkSocket::dec_dataBaseConnect()
+std::string NetworkSocket::connArgsMap2String()
 {
-	if (this->m_dataBase != NULL) {
-		this->m_dataBase->dec_connectionNum();
+	StringBuf result;
+	KVStringMap::iterator it = this->m_connArgsMap.begin();
+	for(; it != this->m_connArgsMap.end(); ++it) {
+		result.appendFormat("%s:%s;", it->first.c_str(), it->second.c_str());
 	}
+	return std::string(result.addr(), result.length());
+}
+
+void NetworkSocket::add_connArgs(const std::string& key, const std::string& value)
+{
+	this->m_connArgsMap[key] = value;
+}
+
+void NetworkSocket::add_backendArgs(const std::string& key, const std::string& value)
+{
+	this->m_backendArgsMap[key] = value;
 }

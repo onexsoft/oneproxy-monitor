@@ -67,11 +67,25 @@ typedef struct _sock_info_t{
 typedef struct _conn_pool_key_t{
 	std::string dbAddr;
 	int port;
+	std::string otherIdentify;
+	unsigned int keyHashCode;
+
+	unsigned int gen_keyHashCode() {
+		StringBuf buf;
+		buf.appendFormat("%s:%d:%s", dbAddr.c_str(), port, otherIdentify.c_str());
+		logs(Logger::DEBUG, "dbAddr: %s, port: %d, otherIdentify: %s",
+				dbAddr.c_str(), port, otherIdentify.c_str());
+		return Tool::quick_hash_code(buf.addr(), buf.length());
+	}
+
 	bool operator< (const _conn_pool_key_t& a) const {
-		if ((strncmp_s(dbAddr, a.dbAddr) < 0) && this->port <= a.port) {
+//		if ((strncmp_s(dbAddr, a.dbAddr) < 0) && this->port <= a.port) {
+//			return true;
+//		}
+//		return this->port < a.port;
+		if (this->keyHashCode < a.keyHashCode)
 			return true;
-		}
-		return this->port < a.port;
+		return false;
 	}
 }ConnPoolKey;
 
@@ -87,7 +101,7 @@ public:
 
 	void set_checkActive();
 	//根据后端连接
-	NetworkSocket* get_backendConnect(std::string dbAddr, int port);
+	NetworkSocket* get_backendConnect(std::string dbAddr, int port, std::string connArgs = std::string(""));
 
 	//把分配后的连接规划到连接池中
 	int set_backendConnect(NetworkSocket* socket);

@@ -293,6 +293,15 @@ std::string Tool::int2string(int i)
 	return result;
 }
 
+std::string Tool::stringTrim(std::string& s)
+{
+	if (s.empty())
+		return s;
+	s.erase(0, s.find_first_not_of(" "));
+	s.erase(s.find_last_not_of(" ") + 1);
+	return s;
+}
+
 std::string Tool::search_oneFile(std::string dirStr, std::string fileType)
 {
 	std::string result;
@@ -305,12 +314,10 @@ std::string Tool::search_oneFile(std::string dirStr, std::string fileType)
 	struct _finddata_t fileInfo;
 	std::string pathName;
 
-
 	pathName.assign(dirStr).append("\\").append(fileType);
 	if ((file = _findfirst(pathName.c_str(), &fileInfo)) == -1) {
 		return result;
-	 }
-
+	}
 
 	 do
 	 {
@@ -341,7 +348,13 @@ std::string Tool::search_oneFile(std::string dirStr, std::string fileType)
     while ((ptr = readdir(dir)) != NULL)
     {
     	std::string fileName(ptr->d_name);
-        if(ptr->d_type == 8 && (fileName.find(desFileType) + desFileType.length()) >= fileName.length()) {    ///file
+    	if (fileName.find(desFileType) == fileName.npos)
+    		continue;
+    	/**
+    	 * don't use ptr->d_type to recognition the file type. some filesystems not support.
+    	 * http://www.man7.org/linux/man-pages/man3/readdir.3.html
+    	 * **/
+        if((fileName.find(desFileType) + desFileType.length()) >= fileName.length()) {///file
             if(dirStr.find_last_of('/') != dirStr.npos) {
             	result.append(dirStr).append(fileName);
             } else {

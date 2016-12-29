@@ -166,19 +166,26 @@ int ProtocolBase::protocol_releaseBackendConnect(Connection& conn, ConnFinishTyp
 			type = CONN_FINISHED_ERR;
 		}
 
+		if (type != CONN_FINISHED_ERR) {
+			uif ( conn.sock.masters != NULL && this->set_oldSocketToPool(conn.sock.masters)) {
+				type = CONN_FINISHED_ERR;
+			} else{
+				conn.sock.masters = NULL;
+			}
+
+			uif (conn.sock.slavers != NULL && this->set_oldSocketToPool(conn.sock.slavers)) {
+				type = CONN_FINISHED_ERR;
+			} else {
+				conn.sock.slavers = NULL;
+			}
+		}
+
 		if (type == CONN_FINISHED_ERR) {
 			if(conn.sock.masters != NULL) {
 				ConnectionPool::get_pool().release_backendSocket(conn.sock.masters);
 			}
 			if (conn.sock.slavers != NULL) {
 				ConnectionPool::get_pool().release_backendSocket(conn.sock.slavers);
-			}
-		} else {
-			if(conn.sock.masters != NULL && ConnectionPool::get_pool().set_backendConnect(conn.sock.masters)) {
-				delete conn.sock.masters;
-			}
-			if (conn.sock.slavers != NULL && ConnectionPool::get_pool().set_backendConnect(conn.sock.slavers)) {
-				delete conn.sock.slavers;
 			}
 		}
 	} else {
@@ -225,8 +232,11 @@ int ProtocolBase::protocol_createBackendConnect(Connection& conn)
 
 		//1. 使用连接池
 		if (conn.database.dataBaseGroup && conn.database.dataBaseGroup->get_useConnectionPool()) {
+			NetworkSocket* cns = conn.sock.curclins;
+			std::string connArgs = std::string("");
+			if (cns) connArgs = cns->connArgsMap2String();
 			ns = ConnectionPool::get_pool().get_backendConnect(
-					conn.curdb()->get_addr(), conn.curdb()->get_port());
+					conn.curdb()->get_addr(), conn.curdb()->get_port(), connArgs);
 			conn.servns() = ns;
 		}
 
@@ -235,6 +245,12 @@ int ProtocolBase::protocol_createBackendConnect(Connection& conn)
 			ns = new NetworkSocket(conn.curdb()->get_addr(), conn.curdb()->get_port());
 			logs(Logger::DEBUG, "server address: %s, port: %d", ns->get_address().c_str(), ns->get_port());
 			conn.servns() = ns;
+
+			if (conn.curdb()->get_connectNum() >= conn.curdb()->get_connectNumLimit()) {
+				logs(Logger::WARNING, "current connect num > connect num limit");
+				return -1;
+			}
+
 			if (tcpClient.get_backendConnection(ns)
 					|| this->protocol_initBackendConnect(conn)) {
 				logs(Logger::ERR, "connection to backend error(address: %s, port:%d)",
@@ -389,11 +405,15 @@ void ProtocolBase::stat_readFrontData(Connection& conn)
 //统计从后端返回的数据
 void ProtocolBase::stat_readBackendData(Connection& conn)
 {
-	record()->record_clientQueryRecvSize(conn.clins()->get_addressHashCode(),
-			conn.servns()->get_recvData().get_length(), conn.sessData.clientInfo);
+	lif (conn.clins() != NULL && conn.servns() != NULL) {
+		record()->record_clientQueryRecvSize(conn.clins()->get_addressHashCode(),
+				conn.servns()->get_recvData().get_length(), conn.sessData.clientInfo);
+	}
 
-	record()->record_sqlInfoRecvSize(conn.record.sqlInfo.sqlHashCode,
-			conn.servns()->get_recvData().get_length(), conn.sessData.sqlInfo);
+	lif (conn.servns() != NULL) {
+		record()->record_sqlInfoRecvSize(conn.record.sqlInfo.sqlHashCode,
+				conn.servns()->get_recvData().get_length(), conn.sessData.sqlInfo);
+	}
 }
 
 //开始事务
@@ -565,6 +585,13 @@ void ProtocolBase::add_socketToPool(NetworkSocket* ns)
 {
 	ConnectionPool::get_pool().save_backendConnect(ns,
 			&NetworkSocket::destroy_networkSocket, &ProtocolBase::check_socketActive, true);
+}
+
+int ProtocolBase::set_oldSocketToPool(NetworkSocket* ns)
+{
+	if (ns != NULL)
+		return ConnectionPool::get_pool().set_backendConnect(ns);
+	return -1;
 }
 
 std::string ProtocolBase::get_sqlText(unsigned int hashCode)

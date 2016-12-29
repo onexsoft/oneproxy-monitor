@@ -58,6 +58,10 @@ typedef HandleData FrontHandle;
 typedef struct _data_packet_t{
 	void* dataPointer;
 	FreeFunc freeFunc;
+	_data_packet_t() {
+		this->dataPointer = NULL;
+		this->freeFunc = NULL;
+	}
 }DataPacket;
 
 typedef struct _backend_handle_data_t{
@@ -75,7 +79,8 @@ typedef struct _backend_handle_data_t{
 	~_backend_handle_data_t() {
 		std::vector<DataPacket>::iterator it = dataPacketVec.begin();
 		for(; it != dataPacketVec.end(); ++it) {
-			(*(it->freeFunc))(it->dataPointer);
+			if (it->freeFunc != NULL && it->dataPointer != NULL)
+				(*(it->freeFunc))(it->dataPointer);
 		}
 	}
 }BackendHandle;
@@ -96,6 +101,7 @@ public:
 	int get_backendHandleBasePrepared(unsigned int preparedHandle, BackendHandle& backendHandle);
 	void remove_handleBaseCursor(unsigned int cursorHandle);
 	void remove_handleBasePrepared(unsigned int preparedHandle);
+	void set_backendServer(void* ns);
 
 private:
 	int get_globalHandleId(unsigned int& handleId);

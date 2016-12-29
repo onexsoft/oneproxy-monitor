@@ -33,6 +33,7 @@
 #include <string>
 #include <string.h>
 #include <errno.h>
+#include <map>
 
 #include "define.h"
 #include "logger.h"
@@ -80,8 +81,12 @@ typedef struct socket_attach_data_t{
 	}
 }SocketAttachData;
 
-class NetworkSocket{
+typedef enum _socket_status_t{
+	SOCKET_STATUS_CLEANUP_T,
+	SOCKET_STATUS_WORKING_T,
+} SocketStatusT;
 
+class NetworkSocket{
 public:
 	NetworkSocket() {
 		this->m_port = 0;
@@ -90,6 +95,7 @@ public:
 		this->m_addressHashCode = 0;
 		this->m_bufPointer = NULL;
 		this->m_dataBase = NULL;
+		this->m_status = SOCKET_STATUS_WORKING_T;
 	}
 	NetworkSocket(std::string address, int port) {
 		this->m_address = address;
@@ -99,6 +105,7 @@ public:
 		this->m_addressHashCode = 0;
 		this->m_bufPointer = NULL;
 		this->m_dataBase = NULL;
+		this->m_status = SOCKET_STATUS_WORKING_T;
 	}
 	~NetworkSocket() {
 		if (this->m_attachData.pointer != NULL && this->m_attachData.pointer_desFunc != NULL) {
@@ -110,8 +117,9 @@ public:
 			closeSocket(m_fd);
 			m_fd = 0;
 		}
-
-		this->dec_dataBaseConnect();
+		if (this->m_dataBase) {
+			this->m_dataBase->dec_connectionNum();
+		}
 	}
 
 	static void destroy_networkSocket(void* ns) {
@@ -133,7 +141,6 @@ public:
 	void set_addr(int af, unsigned int port);
 	void set_portAndAddr(unsigned int port, std::string address);
 
-	int read_dataLoop();
 	int read_data();
 	int read_dataonBlock();
 	int write_data(StringBuf& buf);
@@ -143,7 +150,9 @@ public:
 	void clear_sendData();
 
 	//add database connect count
-	void dec_dataBaseConnect();
+	std::string connArgsMap2String();
+	void add_connArgs(const std::string& key, const std::string& value);
+	void add_backendArgs(const std::string& key, const std::string& value);
 private:
 	declare_class_member(unsigned int, fd)
 	declare_class_member(unsigned int, port)
@@ -151,22 +160,21 @@ private:
 	declare_class_member(std::string, address)
 	declare_class_member(unsigned int, addressHashCode)
 	declare_class_member(ConnectionType, connectionType)
-
 	declare_class_member_co(StringBuf, recvData)
 	declare_class_member_co(StringBuf, sendData)//需要重新尝试发送的数据
 	declare_class_member_co(SocketRecord, socketRecord)
 	//指向需要经过协议处理的数据， 有可能是本socket接收到的数据包，也有可能是新生成的数据包
 	//比如sqlserver 中合并后的数据包
 	declare_class_member(StringBuf*, bufPointer)
-
 	declare_class_member_co(Addr, addr)
 	declare_class_member_co(SocketAttachData, attachData)
-
 	//当前socket所属的数据库
 	declare_class_member(DataBase*, dataBase);
 
-	//save the client sockaddr
-	declare_class_member_co(struct sockaddr, sockaddr);
+	//add by huih@20161220, for server socket.
+	declare_class_member_co(KVStringMap, connArgsMap)
+	declare_class_member_co(KVStringMap, backendArgsMap)
+	declare_class_member(SocketStatusT, status)
 };
 
 #endif /* NETWORKSOCKET_H_ */

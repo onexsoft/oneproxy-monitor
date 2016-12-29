@@ -131,7 +131,7 @@ int StringBuf::append(const char* str)
 	return 0;
 }
 
-int StringBuf::append(const void* data, int dataLen)
+int StringBuf::append(const void* data, const unsigned int dataLen)
 {
 	if (this->m_allocateLen < this->m_length + dataLen) {
 		this->m_allocateLen = this->alignment(this->m_length + dataLen);

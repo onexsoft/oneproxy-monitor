@@ -106,6 +106,7 @@ int DataBaseGroup::set_dataBaseGroupVec(std::vector<DataBase>& dbVec,
 			}
 
 			std::string dbLabelName = dbGroupName.substr(pos, curPos - pos);
+			dbLabelName = Tool::stringTrim(dbLabelName);
 			std::vector<DataBase>::iterator it = dbVec.begin();
 			for(; it != dbVec.end(); ++it) {
 				if (strncasecmp_s(it->get_labelName(), dbLabelName) == 0) {
@@ -114,7 +115,7 @@ int DataBaseGroup::set_dataBaseGroupVec(std::vector<DataBase>& dbVec,
 				}
 			}
 			if (it == dbVec.end()) {
-				logs(Logger::ERR, "no %s database info error", dbLabelName.c_str());
+				std::cout << "no find " << dbLabelName.c_str() << " database info, error" << std::endl;
 			}
 
 			if (curPos >= dbGroupName.length())
@@ -165,6 +166,7 @@ Config::Config()
 	add_dbConfig(fakedb, "weightvalue", "0", &DataBase::cvtInt, &DataBase::set_weightValue);
 	add_dbConfig(fakedb, "username", "sa", &DataBase::cvtString, &DataBase::set_userName);
 	add_dbConfig(fakedb, "password", "0000", &DataBase::cvtString, &DataBase::set_password);
+	add_dbConfig(fakedb, "connectnumlimit", "1000", &DataBase::cvtInt, &DataBase::set_connectNumLimit);
 	this->dbInfoCfg.push_back(fakedb);
 
 	//前端与后端服务信息进行关联
@@ -177,6 +179,8 @@ Config::Config()
 	add_dbConfig(dbg, "passwordseparate", "true", &DataBaseGroup::cvtBool, &DataBaseGroup::set_passwordSeparate);
 	add_dbConfig(dbg, "readslave", "true", &DataBaseGroup::cvtBool, &DataBaseGroup::set_readSlave);
 	add_dbConfig(dbg, "useconnectionpool", "true", &DataBaseGroup::cvtBool, &DataBaseGroup::set_useConnectionPool);
+	add_dbConfig(dbg, "clientauthmethod", "md5", &DataBaseGroup::cvtString, &DataBaseGroup::set_clientAuthMethod);
+	add_dbConfig(dbg, "clearbackendconnection", "true", &DataBaseGroup::cvtBool, &DataBaseGroup::set_clearBackendConnection);
 	this->dbGroupCfg.push_back(dbg);
 #undef add_dbConfig
 
@@ -270,19 +274,21 @@ void Config::print_config()
 	std::vector<DataBase>::iterator it = dbVector.begin();
 	for (; it != dbVector.end(); ++it) {
 		logs(Logger::INFO, "database: labelName: %s, addr: %s, port: %d, weightValue: %d, "
-				"connectNum: %d, userName: %s, password: %s",
+				"connectNum: %d, userName: %s, password: %s, connectNumLimit: %d",
 				it->get_labelName().c_str(), it->get_addr().c_str(), it->get_port(),
 				it->get_weightValue(), it->get_connectNum(), it->get_userName().c_str(),
-				it->get_password().c_str());
+				it->get_password().c_str(), it->get_connectNumLimit());
 	}
 
 	std::vector<DataBaseGroup>::iterator itg = dbGroupVector.begin();
 	for (; itg != dbGroupVector.end(); ++itg) {
 		logs(Logger::INFO, "dbGroup: labelName: %s, className: %s, master: %s, slave: %s, "
-				"frontPort: %d, passwordSeparate: %d, readSlave: %d, useConnectionPool: %d",
+				"frontPort: %d, passwordSeparate: %d, readSlave: %d, useConnectionPool: %d,"
+				"clearBackendConnection: %d",
 				itg->get_labelName().c_str(), itg->get_className().c_str(),
 				itg->get_dbMasterGroup().c_str(), itg->get_dbSlaveGroup().c_str(), itg->get_frontPort(),
-				itg->get_passwordSeparate(), itg->get_readSlave(), itg->get_useConnectionPool());
+				itg->get_passwordSeparate(), itg->get_readSlave(), itg->get_useConnectionPool(),
+				itg->get_clearBackendConnection());
 	}
 }
 
@@ -338,12 +344,11 @@ int Config::handle_config()
 	}
 
 	//forbit PGProtocol, FakeProtocol use passwordSeparate.
-	std::string pgp = std::string("PGProtocol");
+	//std::string pgp = std::string("PGProtocol");
 	std::string fp = std::string("FakeProtocol");
 	std::vector<DataBaseGroup>::iterator it = dbGroupVector.begin();
 	for(; it != dbGroupVector.end(); ++it) {
-		if (it->get_className().size() &&
-				(strncmp_s(it->get_className(), pgp) == 0 || strncmp_s(it->get_className(), fp) == 0)) {
+		if (it->get_className().size() && strncmp_s(it->get_className(), fp) == 0) {
 			it->set_passwordSeparate(false);
 			it->set_readSlave(false);
 			it->set_useConnectionPool(false);
@@ -553,13 +558,19 @@ int Config::handle_args(int argc, char* argv[])
 				config()->set_clientUserName(std::string(optarg));
 				break;
 			case 'U':
-				db.set_userName(std::string(optarg));
+			{
+				std::string un = std::string(optarg);
+				db.set_userName(un);
+			}
 				break;
 			case 'w':
 				config()->set_clientPassword(std::string(optarg));
 				break;
 			case 'W':
-				db.set_password(std::string(optarg));
+			{
+				std::string passwd = std::string(optarg);
+				db.set_password(passwd);
+			}
 				break;
 			case 'h':
 				printf("%s\n", usage_str);

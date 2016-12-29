@@ -29,6 +29,9 @@
 #ifndef DEFINE_H_
 #define DEFINE_H_
 
+#include <iostream>
+#include <map>
+
 const int cf_tcp_socket_buffer = 0;
 const int cf_tcp_keepidle = 0;
 const int cf_tcp_keepintvl = 0;
@@ -83,5 +86,6 @@ typedef void (*FreeFunc) (void*);
 #endif
 #endif
 
+typedef std::map<std::string, std::string> KVStringMap;
 
 #endif /* DEFINE_H_ */

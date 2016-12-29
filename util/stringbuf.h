@@ -55,7 +55,7 @@ public:
 	void erase(unsigned int startPos, unsigned int endPos);
 
 	int append(const char* str);
-	int append(const void* data, const int dataLen);
+	int append(const void* data, const unsigned int dataLen);
 	int appendFormat(const char* fmt, ...);
 	int insert(const unsigned int pos, const void* data, const int dataLen);
 	void clear();

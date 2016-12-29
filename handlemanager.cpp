@@ -92,14 +92,13 @@ int HandleManager::add_handle(const BackendHandle& backendHandle, FrontHandle& f
 			frontHandle.preparedHandle, frontHandle.cursorHandle);
 	this->frontBackendHandleMap[frontHandle] = backendHandle;
 
-	this->show_fbHandleMap();
+//	this->show_fbHandleMap();
 	return 0;
 }
 
-
 int HandleManager::get_backendHandle(FrontHandle frontHandle, BackendHandle& backendHandle)
 {
-	this->show_fbHandleMap();
+	//this->show_fbHandleMap();
 	logs(Logger::DEBUG, "preaparedHandle: %u, cursorHandle: %u",
 			frontHandle.preparedHandle, frontHandle.cursorHandle);
 	FBHandleMap::iterator it = this->frontBackendHandleMap.find(frontHandle);
@@ -151,6 +150,16 @@ void HandleManager::remove_handleBasePrepared(unsigned int preparedHandle)
 	front.cursorHandle = 0;
 	front.preparedHandle = preparedHandle;
 	this->remove_handle(front);
+}
+
+void HandleManager::set_backendServer(void* ns)
+{
+	FBHandleMap::iterator it = this->frontBackendHandleMap.begin();
+	for(; it != this->frontBackendHandleMap.end(); ++it) {
+		if (it->second.pointer == NULL) {
+			it->second.pointer = ns;
+		}
+	}
 }
 
 int HandleManager::get_globalHandleId(unsigned int& handleId)

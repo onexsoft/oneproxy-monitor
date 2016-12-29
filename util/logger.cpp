@@ -162,7 +162,7 @@ void Logger::outputStrategy(const char* logstr) {
 
 void Logger::outputConsoleOrFile(const char* logstr) {
 	logger_mutex_lock();
-	printf("%s", logstr);
+//	printf("%s", logstr);
 	if (this->m_logFilePath.size() > 0)
 	{
 

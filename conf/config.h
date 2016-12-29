@@ -66,11 +66,11 @@ class DataBase: public ConfigBase{
 	declare_class_member(unsigned int, port)
 	declare_class_member(unsigned int, weightValue) //权重值越高，并使用的可能性越高
 	declare_class_member(unsigned int, connectNum) //内部使用，不用外部配置。记录当前数据库有多少连接
-	declare_class_member(std::string, userName)
-	declare_class_member(std::string, password)
-
+	declare_class_member_co(std::string, userName)
+	declare_class_member_co(std::string, password)
 	//internal use parameter
 	declare_class_member(bool, isActive)
+	declare_class_member(unsigned int, connectNumLimit)//连接到后端的数量限制
 
 	declare_cvt_func(cvtString)
 	declare_cvt_func(cvtInt)
@@ -82,6 +82,7 @@ public:
 		this->m_weightValue = 0;
 		this->m_connectNum = 0;
 		this->m_isActive = true;
+		this->m_connectNumLimit = 1000;
 	}
 	DataBase(std::string labelName, std::string addr, unsigned int port, unsigned int weightValue,
 			std::string userName, std::string password):
@@ -92,7 +93,8 @@ public:
 		m_connectNum(0),
 		m_userName(userName),
 		m_password(password),
-		m_isActive(true)
+		m_isActive(true),
+		m_connectNumLimit(1000)
 	{
 	}
 
@@ -130,6 +132,8 @@ class DataBaseGroup: public ConfigBase {
 	declare_class_member(bool, useConnectionPool)
 	declare_class_member_co(std::vector<DataBase*>, dbMasterGroupVec)
 	declare_class_member_co(std::vector<DataBase*>, dbSlaveGroupVec)
+	declare_class_member(std::string, clientAuthMethod)//md5, trust, password
+	declare_class_member(bool, clearBackendConnection)
 
 	declare_cvt_func(cvtString)
 	declare_cvt_func(cvtInt)
@@ -149,6 +153,7 @@ public:
 		this->m_passwordSeparate = true;
 		this->m_readSlave = true;
 		this->m_useConnectionPool = true;
+		this->m_clearBackendConnection = true;
 	}
 
 	DataBaseGroup(std::string labelName, std::string dbMasterGroup,
@@ -161,6 +166,7 @@ public:
 		this->m_passwordSeparate = true;
 		this->m_readSlave = true;
 		this->m_useConnectionPool = true;
+		this->m_clearBackendConnection = true;
 	}
 
 	bool is_valid() {

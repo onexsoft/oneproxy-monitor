@@ -72,6 +72,7 @@ void OneproxyServer::accept_clientRequest(NetworkSocket *clientSocket)
 	clientSocket->set_addressHashCode(clientHashCode);
 	record()->record_clientQueryAddNewClient(clientSocket->get_addressHashCode(), clientSocket->get_address());
 
+	logs(Logger::DEBUG, "accept fd: %d", clientSocket->get_fd());
 	if (this->connectManager->get_taskSize() > 0) {
 		this->connectManager->add_task(clientSocket);
 	} else {
