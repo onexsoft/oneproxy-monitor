@@ -91,8 +91,11 @@ int HandleManager::add_handle(const BackendHandle& backendHandle, FrontHandle& f
 	logs(Logger::DEBUG, "preparedHandle: %u, cursorHandle: %u",
 			frontHandle.preparedHandle, frontHandle.cursorHandle);
 	this->frontBackendHandleMap[frontHandle] = backendHandle;
+	logs(Logger::DEBUG, "backendCursorHandle: %u, backendPreparedHandle: %u, "
+			"frontBackendHandleMap.size: %d", backendHandle.handle.cursorHandle,
+			backendHandle.handle.preparedHandle, this->frontBackendHandleMap.size());
 
-//	this->show_fbHandleMap();
+	this->show_fbHandleMap();
 	return 0;
 }
 
@@ -107,6 +110,21 @@ int HandleManager::get_backendHandle(FrontHandle frontHandle, BackendHandle& bac
 		return 0;
 	}
 	return -1;
+}
+
+FrontHandle* HandleManager::get_frontHandle(unsigned int backendPreparedHandle,
+		unsigned int backendCursorHandle, void* servns, unsigned int& hashCode)
+{
+	FBHandleMap::iterator it = this->frontBackendHandleMap.begin();
+	for (; it != this->frontBackendHandleMap.end(); ++it) {
+		if (it->second.handle.cursorHandle == backendCursorHandle
+				&& it->second.handle.preparedHandle == backendPreparedHandle
+				&& it->second.pointer == servns) {
+			hashCode = it->second.hashCode;
+			return (FrontHandle*)&it->first;
+		}
+	}
+	return NULL;
 }
 
 void HandleManager::remove_handle(FrontHandle frontHandle)
@@ -142,6 +160,15 @@ void HandleManager::remove_handleBaseCursor(unsigned int cursorHandle)
 	front.cursorHandle = cursorHandle;
 	front.preparedHandle = 0;
 	this->remove_handle(front);
+
+	FBHandleMap::iterator it = this->frontBackendHandleMap.begin();
+	for (; it != this->frontBackendHandleMap.end();) {
+		if (it->first.cursorHandle == cursorHandle) {
+			this->frontBackendHandleMap.erase(it++);
+		} else {
+			++it;
+		}
+	}
 }
 
 void HandleManager::remove_handleBasePrepared(unsigned int preparedHandle)
@@ -194,12 +221,12 @@ void HandleManager::close_globalHandleId(unsigned int handle)
 
 void HandleManager::show_fbHandleMap()
 {
+	logs(Logger::ERR, "frontBackendHandleMap.size: %d", this->frontBackendHandleMap.size());
 	FBHandleMap::iterator it = this->frontBackendHandleMap.begin();
 	for (; it != this->frontBackendHandleMap.end(); ++it) {
-		logs(Logger::DEBUG, "frontPreparedHandle: %u, frontCursorHandle: %u, "
-				"backendPreparedHandle: %u, backendCursorHandle: %u, hashcode: %u, dataVecSize: %d",
+		logs(Logger::DEBUG, "fPH: %u, fCH: %u, bPH: %u, bCH: %u, hashcode: %u, dataVecSize: %d, pointer: %p",
 				it->first.preparedHandle, it->first.cursorHandle,
 				it->second.handle.preparedHandle, it->second.handle.cursorHandle,
-				it->second.hashCode, it->second.dataPacketVec.size());
+				it->second.hashCode, it->second.dataPacketVec.size(), it->second.pointer);
 	}
 }

@@ -182,7 +182,7 @@ void ClientThread::finished_connection(Connection *con, ConnFinishType type)
 	NetworkSocket *ssns = con->sock.slavers;
 	NetworkSocket *csns = con->sock.curservs;
 
-	if (cns && csns) {//explain the client already get server connection
+	if (cns && (msns || ssns) && csns) {//explain the client already get server connection
 		record()->record_clientQueryOnLineTime(
 				cns->get_addressHashCode(),
 				config()->get_globalMillisecondTime() - con->createConnTime,
@@ -335,6 +335,8 @@ int ClientThread::parse_frontDataPacket(Connection* con)
 					return 1;
 				}
 				return 0;
+			} else if (base != NULL) {
+				base->destoryInstance();
 			}
 		}
 		return -1;

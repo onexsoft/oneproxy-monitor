@@ -374,7 +374,7 @@ int NetworkSocket::write_data(StringBuf& buf)
 		return 0;
 	}
 
-	logs_buf("xxx write_data", (char*)(buf.addr() + buf.get_offset()), buf.get_remailLength());
+//	logs_buf("xxx write_data", (char*)(buf.addr() + buf.get_offset()), buf.get_remailLength());
 	int len = 0;
 	while(buf.get_remailLength() > 0) {
 //		logs(Logger::ERR, "send data(%d) bytes to client fd(%d)", buf.get_remailLength(), this->m_fd);

@@ -42,15 +42,24 @@ int FreeImpl::get_databaseFromGroup(Connection& con)
 	uif(con.database.dataBaseGroup == NULL)
 		return -1;
 
-	if (con.database.dataBaseGroup->get_dbMasterGroupVec().size() > 0) {
-		con.database.masterDataBase = con.database.dataBaseGroup->get_dbMasterGroupVec().front();
-	} else {//必须需要master
-		logs(Logger::ERR, "no master database in config file");
+	std::vector<DataBase*>::iterator it = con.database.dataBaseGroup->get_dbMasterGroupVec().begin();
+	for (; it != con.database.dataBaseGroup->get_dbMasterGroupVec().end(); ++it) {
+		if ((*it)->get_isActive()) {
+			con.database.masterDataBase = *it;
+			break;
+		}
+	}
+	if (con.database.masterDataBase == NULL) {//必须需要master
+		logs(Logger::ERR, "no valid database in config file");
 		return -1;
 	}
 
-	if (con.database.dataBaseGroup->get_dbSlaveGroupVec().size() > 0) {//可以没有slave
-		con.database.slaveDataBase = con.database.dataBaseGroup->get_dbSlaveGroupVec().front();
+	std::vector<DataBase*>::iterator sit = con.database.dataBaseGroup->get_dbSlaveGroupVec().begin();
+	for (; sit != con.database.dataBaseGroup->get_dbSlaveGroupVec().end(); ++sit) {
+		if ((*sit)->get_isActive()) {
+			con.database.slaveDataBase = *sit;
+			break;
+		}
 	}
 
 	//first set current database is master database

@@ -37,7 +37,10 @@
 #include <process.h>
 #else
 #include <pthread.h>
+#include <errno.h>
 #endif
+#include <stdlib.h>
+#include <string.h>
 
 #ifdef WIN32
 typedef HANDLE MutexLockHandle;
@@ -71,8 +74,14 @@ void MutexLock::initMutex()
 	this->mutex = ::CreateMutex(NULL, false, NULL);
 	this->mutexCond = ::CreateEvent(NULL, false, false, "win mutex condition");
 #else
-	pthread_mutex_init(&this->mutex, NULL);
-	pthread_cond_init(&this->mutexCond, NULL);
+	if (pthread_mutex_init(&this->mutex, NULL)) {
+		std::cerr << "pthread_mutex_init error " << strerror(errno) << std::endl;
+		exit(-1);
+	}
+	if (pthread_cond_init(&this->mutexCond, NULL)) {
+		std::cerr << "pthread_cond_init error" << strerror(errno) << std::endl;
+		exit(-1);
+	}
 #endif
 }
 

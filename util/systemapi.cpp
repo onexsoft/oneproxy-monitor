@@ -487,6 +487,7 @@ int SystemApi::system_setFDNum(unsigned int max_files_number) {
 	rlim_t hard_limit;
 
 	if (-1 == getrlimit(RLIMIT_NOFILE, &max_files_rlimit)) {
+		logs(Logger::ERR, "getrlimit error(%s)", SystemApi::system_strerror());
 		return -1;
 	}
 
@@ -499,6 +500,7 @@ int SystemApi::system_setFDNum(unsigned int max_files_number) {
 	}
 
 	if (-1 == setrlimit(RLIMIT_NOFILE, &max_files_rlimit)) {
+		logs(Logger::ERR, "setrlimit error(%s)", SystemApi::system_strerror());
 		return -1;
 	}
 

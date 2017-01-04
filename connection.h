@@ -115,6 +115,7 @@ public:
 	~_auto_pointer_t() {
 		if (this->data != NULL && this->func != NULL) {
 			this->func(this->data);
+			this->data = NULL;
 		}
 	}
 	void set_autoPointer(void* data, Func func) {
@@ -145,6 +146,12 @@ typedef struct _socket_set_t{
 	NetworkSocket* slavers;
 	NetworkSocket* curservs;//指向masters或者slavers
 	_socket_set_t() {
+		this->curclins = NULL;
+		this->curservs = NULL;
+		this->masters = NULL;
+		this->slavers = NULL;
+	}
+	~_socket_set_t() {
 		this->curclins = NULL;
 		this->curservs = NULL;
 		this->masters = NULL;

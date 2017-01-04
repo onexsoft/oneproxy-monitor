@@ -156,7 +156,7 @@ public:
 private:
 	declare_class_member(unsigned int, fd)
 	declare_class_member(unsigned int, port)
-	declare_class_member(std::string, name)//socket name:listen socket, client socket, server socket
+//	declare_class_member(std::string, name)//socket name:listen socket, client socket, server socket
 	declare_class_member(std::string, address)
 	declare_class_member(unsigned int, addressHashCode)
 	declare_class_member(ConnectionType, connectionType)

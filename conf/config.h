@@ -81,7 +81,7 @@ public:
 		this->m_port = 0;
 		this->m_weightValue = 0;
 		this->m_connectNum = 0;
-		this->m_isActive = true;
+		this->m_isActive = false;
 		this->m_connectNumLimit = 1000;
 	}
 	DataBase(std::string labelName, std::string addr, unsigned int port, unsigned int weightValue,

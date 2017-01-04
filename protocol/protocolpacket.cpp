@@ -425,9 +425,8 @@ int ProtocolPacket::get_string(StringBuf& stringBuf, std::string& desStr)
 {
 	char *p = (char*)memchr((stringBuf.addr() + stringBuf.get_offset()), 0, stringBuf.get_remailLength());
 	unsigned int len = (p - stringBuf.addr()) - stringBuf.get_offset() + 1;
-	uif (len <= 0)
+	uif (len <= 0 || len > stringBuf.get_remailLength())
 		return -1;
-
 	desStr.append(std::string((char*)(stringBuf.addr() + stringBuf.get_offset()), len - 1));
 	stringBuf.set_offset(stringBuf.get_offset() + len);
 

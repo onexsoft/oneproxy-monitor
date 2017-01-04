@@ -60,7 +60,11 @@ StringBuf::StringBuf(StringBuf const& sb)
 StringBuf::~StringBuf() {
 	if (this->m_buf != NULL) {
 		MemManager::free(this->m_buf);
+		this->m_buf = NULL;
 	}
+	this->m_allocateLen = 0;
+	this->m_length = 0;
+	this->m_offset = 0;
 }
 
 int StringBuf::reallocMem(unsigned int size)

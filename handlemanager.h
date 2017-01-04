@@ -95,6 +95,9 @@ public:
 	int add_handle(const BackendHandle& backendHandle, FrontHandle& frontHandle, bool useGlobalId = true);
 
 	int get_backendHandle(FrontHandle frontHandle, BackendHandle& backendHandle);
+	FrontHandle* get_frontHandle(unsigned int backendPreparedHandle,
+			unsigned int backendCursorHandle, void* servns, unsigned int& hashCode);
+
 	void remove_handle(FrontHandle frontHandle);
 
 	int get_backendHandleBaseCursor(unsigned int cursorHandle, BackendHandle& backendHandle);
@@ -102,7 +105,6 @@ public:
 	void remove_handleBaseCursor(unsigned int cursorHandle);
 	void remove_handleBasePrepared(unsigned int preparedHandle);
 	void set_backendServer(void* ns);
-
 private:
 	int get_globalHandleId(unsigned int& handleId);
 	void close_globalHandleId(unsigned int handle);
