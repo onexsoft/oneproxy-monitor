@@ -221,7 +221,7 @@ void HandleManager::close_globalHandleId(unsigned int handle)
 
 void HandleManager::show_fbHandleMap()
 {
-	logs(Logger::ERR, "frontBackendHandleMap.size: %d", this->frontBackendHandleMap.size());
+	logs(Logger::DEBUG, "frontBackendHandleMap.size: %d", this->frontBackendHandleMap.size());
 	FBHandleMap::iterator it = this->frontBackendHandleMap.begin();
 	for (; it != this->frontBackendHandleMap.end(); ++it) {
 		logs(Logger::DEBUG, "fPH: %u, fCH: %u, bPH: %u, bCH: %u, hashcode: %u, dataVecSize: %d, pointer: %p",

@@ -155,8 +155,7 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 	int tret = 0;
 	if ((tret = this->parse_frontDataPacket(con))) {
 		if (tret == -1) {
-			logs(Logger::ERR, "don't recognition the packet "
-				"and current don't have database information, so close the connection");
+			logs(Logger::ERR, "parse front data packet error, close the connection.");
 			this->finished_connection(con, CONN_FINISHED_ERR);
 		} else if (tret == 1) {
 			this->finished_connection(con, CONN_FINISHED_NORMAL);
@@ -423,33 +422,48 @@ int ClientThread::parse_backendDataPacket(Connection* con) {
 }
 
 int ClientThread::send_data(Connection& conn, bool sendToClient) {
-
+	logs(Logger::DEBUG, "sendToClient:%d", sendToClient);
 	if (sendToClient) {
 		NetworkSocket* sns = conn.sock.curservs;
 		if (sns != NULL) {
 			if (sns->get_recvData().get_remailLength() > 0) {
-				this->write_data(conn, true);
+				uif (this->write_data(conn, true)) {
+					logs(Logger::ERR, "write data error");
+					return -1;
+				}
 			}
 			if (sns->get_sendData().get_remailLength() > 0) {
-				this->write_data(conn, false);
+				uif (this->write_data(conn, false)) {
+					logs(Logger::ERR, "write data error");
+					return -1;
+				}
 			}
 		}
 
 		NetworkSocket* cns = conn.sock.curclins;
 		if (cns != NULL) {
 			if (cns->get_sendData().get_remailLength() > 0) {
-				this->write_data(conn, true);
+				uif (this->write_data(conn, true)) {
+					logs(Logger::ERR, "write data error");
+					return -1;
+				}
 			}
 		}
 	} else {
 		NetworkSocket* cns = conn.sock.curclins;
 		if (cns != NULL) {
 			if (cns->get_recvData().get_remailLength() > 0) {
-				this->write_data(conn, false);
+				uif (this->write_data(conn, false)) {
+					logs(Logger::ERR, "write data error");
+					return -1;
+				}
 			}
 
 			if (cns->get_sendData().get_remailLength() > 0) {
-				this->write_data(conn, true);
+				uif (this->write_data(conn, true)) {
+					logs(Logger::ERR, "write data error");
+					return -1;
+				}
 			}
 		}
 
@@ -457,7 +471,10 @@ int ClientThread::send_data(Connection& conn, bool sendToClient) {
 		NetworkSocket* sns = conn.sock.curservs;
 		if (sns != NULL) {
 			if (sns->get_sendData().get_remailLength() > 0) {
-				this->write_data(conn, false);
+				uif (this->write_data(conn, false)) {
+					logs(Logger::ERR, "write data error");
+					return -1;
+				}
 			}
 		}
 	}
@@ -465,7 +482,7 @@ int ClientThread::send_data(Connection& conn, bool sendToClient) {
 	return 0;
 }
 
-void ClientThread::write_data(Connection& con, bool isFront)
+int ClientThread::write_data(Connection& con, bool isFront)
 {
 	int ret = 0;
 	NetworkSocket* tSocket = NULL;
@@ -475,6 +492,7 @@ void ClientThread::write_data(Connection& con, bool isFront)
 	NetworkSocket* sSocket = NULL; //source socket.
 	Func sFunc = NULL;
 
+	logs(Logger::DEBUG, "isFront: %d", isFront);
 	if (isFront) {
 		tSocket = con.sock.get_clientSock();
 		sSocket = con.sock.get_curServSock();
@@ -504,7 +522,7 @@ void ClientThread::write_data(Connection& con, bool isFront)
 	uif (sendData.get_remailLength() <= 0 && data.get_remailLength() <= 0) {
 		data.clear();
 		sendData.clear();
-		return;
+		return 0;
 	}
 
 #define save_data_toSendData() do{\
@@ -526,7 +544,7 @@ void ClientThread::write_data(Connection& con, bool isFront)
 				break;
 			} else if (ret) {//error
 				this->finished_connection(&con, CONN_FINISHED_ERR);
-				return;
+				return -1;
 			} else {//write finished.
 				sendData.clear();
 				if (sSocket != NULL)
@@ -541,7 +559,7 @@ void ClientThread::write_data(Connection& con, bool isFront)
 		} else uif (ret) {
 			logs(Logger::ERR, "write data to (%d) error", desSocket.get_fd());
 			this->finished_connection(&con, CONN_FINISHED_ERR);
-			return;
+			return -1;
 		} else {//写数据完毕
 			logs(Logger::INFO, "write finished ...");
 			this->ioEvent->add_ioEventRead(desSocket.get_fd(), func, this);
@@ -549,6 +567,7 @@ void ClientThread::write_data(Connection& con, bool isFront)
 		}
 	} while(0);
 	data.clear();
+	return 0;
 }
 
 Connection* ClientThread::get_connection(unsigned int fd)

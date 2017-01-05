@@ -39,10 +39,11 @@ ProtocolHandleRetVal ProtocolBase::protocol_front(Connection& conn)
 		//1. 统计前端接收到的数据长度
 		this->stat_readFrontData(conn);
 
-		//2. 预处理
+		//2. 预处理，不同的数据库的数据使用不同的逻辑
+		//sqlserver中把前端数据进行合并，直到得到一个完整的数据包为止。
 		resultValue = this->prehandle_frontPacket(conn);
 		if (resultValue != HANDLE_RETURN_SUCCESS) {//可能出错或者需要直接转发
-			logs(Logger::ERR, "resultValue != HANDLE_RETURN_SUCCESS");
+			logs(Logger::ERR, "prehandle front packet error");
 			break;
 		}
 
@@ -55,7 +56,7 @@ ProtocolHandleRetVal ProtocolBase::protocol_front(Connection& conn)
 
 		//4. 调用注册函数进行处理
 		StringBuf& desPacket = *(conn.sock.get_clientSock()->get_bufPointer());
-		for(; desPacket.get_offset() < desPacket.length(); ) {	//循环处理，直到所有的数据处理完毕
+		for(; desPacket.get_offset() < desPacket.length(); ) {//循环处理，直到所有的数据处理完毕
 			int type = this->get_packetType(desPacket);
 			ProtocolBase::BaseHandleFuncMap::iterator it = this->frontHandleFunc.find(type);
 			lif(it != this->frontHandleFunc.end()) {

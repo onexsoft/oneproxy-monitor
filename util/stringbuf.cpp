@@ -35,7 +35,7 @@
 #include "logger.h"
 #include "memmanager.h"
 
-#define default_cache_size (1024 * 1024)
+#define default_cache_size (1024)
 #define default_max_cache_size (10 * default_cache_size)
 
 StringBuf::StringBuf()
