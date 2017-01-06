@@ -163,7 +163,7 @@ protected:
 	//把连接增加到pool中
 	virtual void add_socketToPool(NetworkSocket* ns);
 	//把已经使用过的后端连接保存到pool中
-	virtual int set_oldSocketToPool(NetworkSocket* ns);
+	virtual int set_oldSocketToPool(NetworkSocket* ns, ConnFinishType type);
 	//根据hashcode查找sql语句
 	virtual std::string get_sqlText(unsigned int hashCode);
 };

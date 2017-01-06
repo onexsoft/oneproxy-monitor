@@ -43,7 +43,9 @@ ProtocolHandleRetVal ProtocolBase::protocol_front(Connection& conn)
 		//sqlserver中把前端数据进行合并，直到得到一个完整的数据包为止。
 		resultValue = this->prehandle_frontPacket(conn);
 		if (resultValue != HANDLE_RETURN_SUCCESS) {//可能出错或者需要直接转发
-			logs(Logger::ERR, "prehandle front packet error");
+			uif (resultValue == HANDLE_RETURN_ERROR) {
+				logs(Logger::ERR, "prehandle front packet error");
+			}
 			break;
 		}
 
@@ -66,8 +68,9 @@ ProtocolHandleRetVal ProtocolBase::protocol_front(Connection& conn)
 					StringBuf& sendPacket = conn.clins()->get_sendData();
 					sendPacket.append((void*)(desPacket.addr() + desPacket.get_offset()), desPacket.get_remailLength());
 
-					//2. 把客户端接收包中的数据清理掉，防止发送到服务端
+					//2. 把客户端接收包中的数据清理掉，防止发送到服务端,同时清理掉despacket的数据
 					conn.clins()->get_recvData().clear();
+					desPacket.clear();
 					break;
 				} else if (resultValue != HANDLE_RETURN_SUCCESS) {
 					break;
@@ -168,13 +171,13 @@ int ProtocolBase::protocol_releaseBackendConnect(Connection& conn, ConnFinishTyp
 		}
 
 		if (type != CONN_FINISHED_ERR) {
-			uif ( conn.sock.masters != NULL && this->set_oldSocketToPool(conn.sock.masters)) {
+			uif ( conn.sock.masters != NULL && this->set_oldSocketToPool(conn.sock.masters, type)) {
 				type = CONN_FINISHED_ERR;
 			} else{
 				conn.sock.masters = NULL;
 			}
 
-			uif (conn.sock.slavers != NULL && this->set_oldSocketToPool(conn.sock.slavers)) {
+			uif (conn.sock.slavers != NULL && this->set_oldSocketToPool(conn.sock.slavers, type)) {
 				type = CONN_FINISHED_ERR;
 			} else {
 				conn.sock.slavers = NULL;
@@ -588,7 +591,7 @@ void ProtocolBase::add_socketToPool(NetworkSocket* ns)
 			&NetworkSocket::destroy_networkSocket, &ProtocolBase::check_socketActive, true);
 }
 
-int ProtocolBase::set_oldSocketToPool(NetworkSocket* ns)
+int ProtocolBase::set_oldSocketToPool(NetworkSocket* ns, ConnFinishType type)
 {
 	if (ns != NULL)
 		return ConnectionPool::get_pool().set_backendConnect(ns);

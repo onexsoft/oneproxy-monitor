@@ -138,7 +138,10 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 		this->finished_connection(con, CONN_FINISHED_ERR);
 		return;
 	} else if (ret == 2) {
-		this->finished_connection(con, CONN_FINISHED_NORMAL);
+		/**
+		 * 客户端强制关闭，服务端的状态可能不正确，是否复用由底层协议决定
+		 * **/
+		this->finished_connection(con, CONN_FINISHED_FRONT_CLOSE);
 		return;
 	}
 
@@ -379,7 +382,10 @@ void ClientThread::handle_readBackendData(unsigned int fd)
 		this->finished_connection(con, CONN_FINISHED_ERR);
 		return;
 	} else if (ret == 2) {
-		this->finished_connection(con, CONN_FINISHED_NORMAL);
+		/***
+		 * 后端关闭，比如数据库强制关闭的情况。此时不能复用连接
+		 * **/
+		this->finished_connection(con, CONN_FINISHED_ERR);
 		return;
 	}
 	if (sns->get_recvData().get_length() == 0) {

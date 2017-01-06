@@ -186,12 +186,12 @@ int KeepAlive::keepalive(int *child_exit_status)
 
 void KeepAlive::handle_signal(int sig)
 {
-	logs(Logger::DEBUG, "handle signal sig: %d", sig);
+	logs(Logger::ERR, "handle signal sig: %d", sig);
 #ifdef _WIN32
 	return;
 #else
 	signal(sig, SIG_IGN);//忽略
-	if (sig == SIGUSR1) {
+	if (sig == SIGUSR1 || sig == SIGINT) {
 		kill(0, SIGINT);//发送信号停止子进程
 		KeepAlive::stop_keepAlive = true;
 	} else {

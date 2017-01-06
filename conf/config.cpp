@@ -153,7 +153,7 @@ Config::Config()
 	add_oneproxyConfig("poolconncheckactivetime", "5", &Config::cvtInt, &Config::set_poolConnCheckActiveTime);
 	add_oneproxyConfig("poolconntimeoutreleasetime", "60", &Config::cvtInt, &Config::set_poolConnTimeoutReleaseTime);
 	add_oneproxyConfig("connecttimeout", "86400", &Config::cvtInt, &Config::set_connectTimeOut);//one day,unit: second.
-	add_oneproxyConfig("acceptthreadnum", "2", &Config::cvtInt, &Config::set_acceptThreadNum);
+	add_oneproxyConfig("acceptthreadnum", "1", &Config::cvtInt, &Config::set_acceptThreadNum);
 	add_oneproxyConfig("listenbacklog", "1000", &Config::cvtInt, &Config::set_listenBackLog);
 #undef add_oneproxyConfig
 
@@ -330,6 +330,25 @@ int Config::handle_config()
 	if (this->get_listenBackLog() <= 128) {
 		this->set_listenBackLog(128);
 	}
+
+	if (this->get_tryConnServerTimes() <= 0) {
+		this->set_tryConnServerTimes(1);
+	}
+
+	if (this->get_maxConnectNum() <= 0) {
+		this->set_maxConnectNum(1);
+	}
+
+	if (this->get_poolConnCheckActiveTime() <= 0) {
+		this->set_poolConnCheckActiveTime(1);
+	}
+	if (this->get_poolConnTimeoutReleaseTime() <= 0) {
+		this->set_poolConnTimeoutReleaseTime(1);
+	}
+	if (this->get_connectTimeOut() <= 0) {
+		this->set_connectTimeOut(1);
+	}
+
 
 	//处理多个端口号的情况。
 	this->handle_ports();

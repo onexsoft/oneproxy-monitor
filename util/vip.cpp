@@ -387,7 +387,10 @@ thread_start_func(Vip::start)
 	if (vip->get_vipAddress().length() <= 0) return 0;
 
 	//clear vip address.
-	vip->down_vipAddress(vip->get_ifname().c_str());
+	if(vip->down_vipAddress(vip->get_ifname().c_str())) {
+		logs(Logger::ERR, "down vip address error");
+		return 0;
+	}
 
 	int serverfd = 0;
 	do{

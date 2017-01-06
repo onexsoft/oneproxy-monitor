@@ -388,11 +388,10 @@ int NetworkSocket::write_data(StringBuf& buf)
 			}
 #else
 			if (errno == EAGAIN) {
-				logs(Logger::ERR, "retry fd: %d", this->m_fd);
+				logs(Logger::INFO, "retry fd: %d", this->m_fd);
 				return 1;//retry
 			}
 #endif
-//			logs_buf_force("xxx write_data", (char*)(buf.addr() + buf.get_offset()), buf.get_remailLength());
 			logs(Logger::ERR, "send data error, fd(%d), errno: %d, err(%s)",
 					this->m_fd, errno, SystemApi::system_strerror(errno));
 			return -1;

@@ -210,7 +210,8 @@ typedef struct _connection_t {
 
 typedef enum _conn_finish_type{
 	CONN_FINISHED_NORMAL,
-	CONN_FINISHED_ERR
+	CONN_FINISHED_ERR,
+	CONN_FINISHED_FRONT_CLOSE//add by huih@20170105
 }ConnFinishType;
 
 #endif /* CONNECTION_H_ */
