@@ -92,7 +92,10 @@ public:
 			ops->set_tcpServer(serverAddr, portList);
 			ops->startThread(OneproxyServer::start, ops);
 			//wait thread start. for update config online
-			while(ops->get_startSuccess() == false) {SystemApi::system_sleep(10);}
+			/***
+			 * sleep的时间不能太短，如果太短当在valgrind检测时，会导致阻塞。
+			 * **/
+			while(ops->get_startSuccess() == false) {SystemApi::system_sleep(1000);}
 			this->acceptThreadList.push_back(ops);
 		}
 	}

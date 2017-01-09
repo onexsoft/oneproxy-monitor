@@ -345,6 +345,19 @@ static TokenInfo tokenInfos[] = {
 };
 #undef S
 
+struct CmpToken{
+	bool operator() (const std::string& a, const std::string& b) const {
+		unsigned int len = a.length();
+		if (len < b.length())
+			len = b.length();
+
+		if (strncasecmp(a.c_str(), b.c_str(), len) < 0) {
+			return true;
+		}
+		return false;
+	}
+};
+
 class TokenMap
 {
 public:
@@ -352,7 +365,7 @@ public:
         for (int i = TK_SQL_ACCESSIBLE; i <= TK_SQL_ZEROFILL; ++i) {
             //TK_SQL_
             std::string s(tokenInfos[i].text + 7, tokenInfos[i].len - 7);
-            this->toLower(s);
+            //this->toLower(s);
             token_map.insert(tokenmap_t::value_type(s, i));
         }
     }
@@ -360,20 +373,20 @@ public:
 
     sql_token_id tokenIdByName(const char* name, int len)
     {
-    	std::string key(name, len);
-    	this->toLower(key);
-        tokenmap_t::iterator it = token_map.find(key);
+//    	std::string key(name, len);
+    	//this->toLower(key);
+        tokenmap_t::iterator it = token_map.find(std::string(name, len));
         if (it != token_map.end()) {
             return (sql_token_id)it->second;
         }
         return TK_LITERAL;
     }
 
-    void toLower(std::string& str) {
-    	transform(str.begin(), str.end(), str.begin(),::tolower);
-    }
+//    void toLower(std::string& str) {
+//    	transform(str.begin(), str.end(), str.begin(),::tolower);
+//    }
 
-    typedef std::map<std::string, int> tokenmap_t;
+    typedef std::map<std::string, int, CmpToken> tokenmap_t;
     tokenmap_t token_map;
 };
 
