@@ -95,7 +95,7 @@ int HandleManager::add_handle(const BackendHandle& backendHandle, FrontHandle& f
 			"frontBackendHandleMap.size: %d", backendHandle.handle.cursorHandle,
 			backendHandle.handle.preparedHandle, this->frontBackendHandleMap.size());
 
-	this->show_fbHandleMap();
+//	this->show_fbHandleMap();
 	return 0;
 }
 

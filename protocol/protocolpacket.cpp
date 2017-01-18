@@ -421,6 +421,28 @@ u_uint64 ProtocolPacket::buffer2Integer(const void* buffer, const unsigned int l
 	return value;
 }
 
+u_uint64 ProtocolPacket::buffer2Integer(const void* buffer, const unsigned int len)
+{
+	uif (len > 8)
+		return -1;
+
+	u_uint64 value = 0;
+	{
+		unsigned int i = 0;
+		unsigned int size = len;
+		if (is_bigEnd()) {
+			forrange(i, 0, size) {
+				value |= (0xff & *(((char*)buffer) + i)) << (size - i - 1) * 8;
+			}
+		} else {
+			forrange(i, 0, size) {
+				value |= (0xff & *(((char*)buffer) + i)) << (i * 8);
+			}
+		}
+	}
+	return value;
+}
+
 int ProtocolPacket::get_string(StringBuf& stringBuf, std::string& desStr)
 {
 	char *p = (char*)memchr((stringBuf.addr() + stringBuf.get_offset()), 0, stringBuf.get_remailLength());

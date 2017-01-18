@@ -142,6 +142,7 @@ Config::Config()
 	add_oneproxyConfig("log_level", "error", &Config::cvtLogger, &Config::set_loggerLevel);
 	add_oneproxyConfig("data_dump", "false", &Config::cvtBool, &Config::set_dumpData);
 	add_oneproxyConfig("log_sql", "false", &Config::cvtBool, &Config::set_logSql);
+	add_oneproxyConfig("logclientsql", "false", &Config::cvtBool, &Config::set_logClientSql);
 	add_oneproxyConfig("tryconnservertimes", "3", &Config::cvtInt, &Config::set_tryConnServerTimes);
 	add_oneproxyConfig("maxconnectnum", "2000", &Config::cvtInt, &Config::set_maxConnectNum);
 	add_oneproxyConfig("keepalive", "false", &Config::cvtBool, &Config::set_keepAlive);
@@ -181,6 +182,8 @@ Config::Config()
 	add_dbConfig(dbg, "useconnectionpool", "true", &DataBaseGroup::cvtBool, &DataBaseGroup::set_useConnectionPool);
 	add_dbConfig(dbg, "clientauthmethod", "md5", &DataBaseGroup::cvtString, &DataBaseGroup::set_clientAuthMethod);
 	add_dbConfig(dbg, "clearbackendconnection", "true", &DataBaseGroup::cvtBool, &DataBaseGroup::set_clearBackendConnection);
+	add_dbConfig(dbg, "usedatabaseconnecttobalace", "false", &DataBaseGroup::cvtBool, &DataBaseGroup::set_useDatabaseConnectToBalace);
+	add_dbConfig(dbg, "usemasterassalve", "false", &DataBaseGroup::cvtBool, &DataBaseGroup::set_useMasterAsSalve);
 	this->dbGroupCfg.push_back(dbg);
 #undef add_dbConfig
 
@@ -256,6 +259,7 @@ void Config::print_config()
 	}
 	logs(Logger::INFO, "dumpData: %d", this->m_dumpData);
 	logs(Logger::INFO, "logSql: %d", this->m_logSql);
+	logs(Logger::INFO, "logclientsql: %d", this->m_logClientSql);
 	logs(Logger::INFO, "httpServerAddr: %s", this->m_httpServerAddr.c_str());
 	logs(Logger::INFO, "httpServerPort: %d", this->m_httpServerPort);
 	logs(Logger::INFO, "logFilePath: %s", this->m_logFilePath.c_str());
@@ -284,11 +288,12 @@ void Config::print_config()
 	for (; itg != dbGroupVector.end(); ++itg) {
 		logs(Logger::INFO, "dbGroup: labelName: %s, className: %s, master: %s, slave: %s, "
 				"frontPort: %d, passwordSeparate: %d, readSlave: %d, useConnectionPool: %d,"
-				"clearBackendConnection: %d",
+				"clearBackendConnection: %d, usedatabaseconnecttobalace: %d, useMasterAsSalve: %d",
 				itg->get_labelName().c_str(), itg->get_className().c_str(),
 				itg->get_dbMasterGroup().c_str(), itg->get_dbSlaveGroup().c_str(), itg->get_frontPort(),
 				itg->get_passwordSeparate(), itg->get_readSlave(), itg->get_useConnectionPool(),
-				itg->get_clearBackendConnection());
+				itg->get_clearBackendConnection(), itg->get_useDatabaseConnectToBalace(),
+				itg->get_useMasterAsSalve());
 	}
 }
 
@@ -390,6 +395,18 @@ int Config::handle_dataBaseGroup()
 	for (; it != dbGroupVector.end(); ++it) {
 		DataBaseGroup::set_dataBaseGroupVec(this->dbVector, it->get_dbMasterGroup(), it->get_dbMasterGroupVec());
 		DataBaseGroup::set_dataBaseGroupVec(this->dbVector, it->get_dbSlaveGroup(), it->get_dbSlaveGroupVec());
+
+		//把主数据库和salve数据的再保存一份到dbGroupVec中
+		std::vector<DataBase*>& dbGVec = it->get_dbGroupVec();
+		std::vector<DataBase*>::iterator tit = it->get_dbMasterGroupVec().begin();
+		for(; tit != it->get_dbMasterGroupVec().end(); ++tit) {
+			dbGVec.push_back((*tit));
+		}
+
+		tit = it->get_dbSlaveGroupVec().begin();
+		for(; tit != it->get_dbSlaveGroupVec().end(); ++tit) {
+			dbGVec.push_back((*tit));
+		}
 	}
 
 	//去掉没有主数据库信息的数据组信息

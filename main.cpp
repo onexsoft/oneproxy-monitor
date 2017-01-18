@@ -34,8 +34,10 @@
 #include "connection.h"
 #include "connectmanager.h"
 #include "pidmanager.h"
+//#include "google/profiler.h"
 
 int main(int argc, char* argv[]) {
+//	ProfilerStart("oneproxy.prof");
 	//处理参数
 	if (config()->handle_args(argc, argv)) {
 		logs(Logger::FATAL, "args error");
@@ -75,6 +77,7 @@ int main(int argc, char* argv[]) {
 
 	//卸载网络环境
 	SystemApi::clear_networkEnv();
+//	ProfilerStop();
 	logs(Logger::ERR, "success finished ...");
 
 	return 0;

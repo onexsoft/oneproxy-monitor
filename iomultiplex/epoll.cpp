@@ -34,6 +34,9 @@ Epoll::Epoll(std::string name)
 {
 #ifndef WIN32
 	epfd = epoll_create(maxEvents);//the max handles
+	if (epfd <= 0) {
+		logs(Logger::FATAL, "epoll_create error(%s)", SystemApi::system_strerror());
+	}
 	trigerMethod = EPOLLET;//EPOLLET
 #else
 	epfd = 0;
@@ -73,14 +76,20 @@ int Epoll::add_ioEvent(unsigned int fd, unsigned int event, Func func, void *arg
 	struct epoll_event ev;
 	ev.data.ptr = NULL;
 	ev.data.fd = fd;
-	ev.events = this->trigerMethod | event;
+	if (event == (unsigned int)-1) {
+		ev.events = this->trigerMethod | EPOLLIN;
+	} else {
+		ev.events = this->trigerMethod | event;
+	}
 	if (is_new) {
 		if (epoll_ctl(this->epfd, EPOLL_CTL_ADD, fd, &ev)) {
-			logs(Logger::ERR, "add fd(%d) event(%d) error", fd, event);
+			logs(Logger::ERR, "epfd(%d) add fd(%d) event(%d) error(%s)",this->epfd, fd,
+					event, SystemApi::system_strerror());
 		}
 	} else {
 		if (epoll_ctl(this->epfd, EPOLL_CTL_MOD, fd, &ev)) {
-			logs(Logger::ERR, "mod fd(%d) event(%d) error", fd, event);
+			logs(Logger::ERR, "epfd(%d) mod fd(%d) event(%d) error(%s)", this->epfd, fd,
+					event, SystemApi::system_strerror());
 		}
 	}
 #endif

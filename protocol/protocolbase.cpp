@@ -28,6 +28,9 @@
 
 #include "protocolbase.h"
 #include "connectionpool.h"
+#include <sstream>
+#include <iostream>
+using namespace std;
 
 ProtocolHandleRetVal ProtocolBase::protocol_front(Connection& conn)
 {
@@ -166,7 +169,7 @@ int ProtocolBase::protocol_releaseBackendConnect(Connection& conn, ConnFinishTyp
 		}
 
 		if (conn.record.type >= TRANS_QUERY_TYPE && conn.record.type < TRANS_QUERY_FINISHED_TYPE) {
-			logs(Logger::ERR, "current connection in trans error");
+			logs(Logger::WARNING, "current connection in trans error");//有可能是前端主动断开导致
 			type = CONN_FINISHED_ERR;
 		}
 
@@ -607,3 +610,85 @@ std::string ProtocolBase::get_sqlText(unsigned int hashCode)
 	return sqlText;
 }
 
+void ProtocolBase::mark_sqlParamPosition(PreparedDataInfoT& preparedDataInfot)
+{
+	if (preparedDataInfot.sql.length() > 0 && preparedDataInfot.paramNum > 0)
+	{
+		for(int i = 0; i < (int)preparedDataInfot.paramNum; ++i) {
+			int startPos = preparedDataInfot.sql.find(preparedDataInfot.param[i].paramName);
+			if (startPos != (int)preparedDataInfot.sql.npos) {
+				preparedDataInfot.param[i].paramStartPos = startPos;
+				preparedDataInfot.param[i].paramEndPos = preparedDataInfot.param[i].paramStartPos
+						+ preparedDataInfot.param[i].paramName.length();
+			} else {
+				preparedDataInfot.param[i].paramStartPos = 0;
+				preparedDataInfot.param[i].paramEndPos = 0;
+			}
+		}
+	}
+}
+
+void ProtocolBase::fill_originSqlValue(const PreparedDataInfoT& preparedDataInfot, Connection& conn)
+{
+	if (preparedDataInfot.paramNum <= 0 || preparedDataInfot.sql.length() <= 0) {
+		if (preparedDataInfot.sql.length() > 0) {
+			output_originSql(preparedDataInfot.sql, conn);
+		}
+		return;
+	}
+
+	if (preparedDataInfot.paramNum != preparedDataInfot.paramValueVec.size()) {
+		logs(Logger::ERR, "The number of the parameter value is not equal the number of param error");
+		logs(Logger::ERR, "paramNum: %d, paramValueNum:%d", preparedDataInfot.paramNum,
+				preparedDataInfot.paramValueVec.size());
+		output_originSql(preparedDataInfot.sql, conn);//如果参数数量和参数值不一致，只输出原始的sql语句
+		return;
+	}
+
+	/**
+	 * 为了防止在填充sql语句时导致位置的变动，从最后一个参数向第一个参数来填充值
+	 * **/
+	std::string tmpsql = (std::string)preparedDataInfot.sql;
+	std::string value;
+	for (int i = (int)(preparedDataInfot.paramNum - 1); i >= 0; --i) {
+		PreparedParamT& ppt = (PreparedParamT&)preparedDataInfot.param[i];
+
+		if (ppt.paramStartPos == 0 || ppt.paramEndPos == 0) {
+			continue;
+		}
+		value = preparedDataInfot.paramValueVec.at(i);
+		if (ppt.paramType == PARAM_TYPE_STRING) {//需要按照字符串处理
+			std::stringstream ss;
+			ss << std::string(tmpsql.c_str(), ppt.paramStartPos);
+			ss << "\"";
+			ss << value;
+			ss << "\"";
+			ss << std::string((char*)(tmpsql.c_str() + ppt.paramEndPos), tmpsql.length() - ppt.paramEndPos);
+			tmpsql = ss.str();
+		} else {//直接替换参数即可
+			std::stringstream ss;
+			ss << std::string(tmpsql.c_str(), ppt.paramStartPos);
+			ss << value;
+			ss << std::string((char*)(tmpsql.c_str() + ppt.paramEndPos), tmpsql.length() - ppt.paramEndPos);
+			tmpsql = ss.str();
+		}
+	}
+	output_originSql(tmpsql, conn);
+}
+
+void ProtocolBase::output_originSql(const std::string& sql, Connection& conn)
+{
+	if (conn.sock.curclins) {
+		NetworkSocket* client = conn.sock.curclins;
+		std::stringstream ss;
+		ss << "[";
+		ss << client->get_address();
+		ss << ":";
+		ss << client->get_port();
+		ss << "] ";
+		ss << sql;
+		logs_logsql_force("%s", ss.str().c_str());
+	} else {
+		logs_logsql_force("%s", sql.c_str());
+	}
+}

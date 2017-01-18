@@ -34,6 +34,7 @@
 #include "define.h"
 #include "record.h"
 #include "ioevent.h"
+#include "systemapi.h"
 
 #ifndef WIN32
 #include <sys/epoll.h>

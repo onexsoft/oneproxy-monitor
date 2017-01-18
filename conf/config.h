@@ -66,6 +66,7 @@ class DataBase: public ConfigBase{
 	declare_class_member(unsigned int, port)
 	declare_class_member(unsigned int, weightValue) //权重值越高，并使用的可能性越高
 	declare_class_member(unsigned int, connectNum) //内部使用，不用外部配置。记录当前数据库有多少连接
+	declare_class_member(unsigned int, allocToFrontConn)//内部使用，不用外部配置。记录当前数据库已经分配给多少前端连接，可能并没有连接到对应的数据库
 	declare_class_member_co(std::string, userName)
 	declare_class_member_co(std::string, password)
 	//internal use parameter
@@ -83,6 +84,7 @@ public:
 		this->m_connectNum = 0;
 		this->m_isActive = false;
 		this->m_connectNumLimit = 1000;
+		this->m_allocToFrontConn = 0;
 	}
 	DataBase(std::string labelName, std::string addr, unsigned int port, unsigned int weightValue,
 			std::string userName, std::string password):
@@ -91,6 +93,7 @@ public:
 		m_port(port),
 		m_weightValue(weightValue),
 		m_connectNum(0),
+		m_allocToFrontConn(0),
 		m_userName(userName),
 		m_password(password),
 		m_isActive(true),
@@ -116,7 +119,23 @@ public:
 
 	void dec_connectionNum() {
 		spinLock.lock();
-		this->set_connectNum(this->get_connectNum() - 1);
+		if (this->get_connectNum() > 0) {
+			this->set_connectNum(this->get_connectNum() - 1);
+		}
+		spinLock.unlock();
+	}
+
+	void inc_allocToFrontConn() {
+		spinLock.lock();
+		this->set_allocToFrontConn(this->get_allocToFrontConn() + 1);
+		spinLock.unlock();
+	}
+
+	void dec_allocToFrontConn() {
+		spinLock.lock();
+		if (this->get_allocToFrontConn() > 0) {
+			this->set_allocToFrontConn(this->get_allocToFrontConn() - 1);
+		}
 		spinLock.unlock();
 	}
 };
@@ -132,8 +151,11 @@ class DataBaseGroup: public ConfigBase {
 	declare_class_member(bool, useConnectionPool)
 	declare_class_member_co(std::vector<DataBase*>, dbMasterGroupVec)
 	declare_class_member_co(std::vector<DataBase*>, dbSlaveGroupVec)
+	declare_class_member_co(std::vector<DataBase*>, dbGroupVec)//内部使用，包含所有的master和slave
 	declare_class_member(std::string, clientAuthMethod)//md5, trust, password
 	declare_class_member(bool, clearBackendConnection)
+	declare_class_member(bool, useDatabaseConnectToBalace)//true 表示使用数据库中的connectNum进行负载均衡，否则使用allocToFrontConn进行负载均衡
+	declare_class_member(bool, useMasterAsSalve)// true 表示读也可以从master数据库上面读取数据
 
 	declare_cvt_func(cvtString)
 	declare_cvt_func(cvtInt)
@@ -154,6 +176,8 @@ public:
 		this->m_readSlave = true;
 		this->m_useConnectionPool = true;
 		this->m_clearBackendConnection = true;
+		this->m_useDatabaseConnectToBalace = false;
+		this->m_useMasterAsSalve = false;
 	}
 
 	DataBaseGroup(std::string labelName, std::string dbMasterGroup,
@@ -167,6 +191,8 @@ public:
 		this->m_readSlave = true;
 		this->m_useConnectionPool = true;
 		this->m_clearBackendConnection = true;
+		this->m_useDatabaseConnectToBalace = false;
+		this->m_useMasterAsSalve = false;
 	}
 
 	bool is_valid() {
@@ -180,6 +206,20 @@ public:
 	static int set_dataBaseGroupVec(std::vector<DataBase>& dbVec,
 			const std::string dbGroupName,
 			std::vector<DataBase*>& dbGVec);
+
+	bool is_masterUseDataBaseConnectNumToBalace() {
+		//判断master是使用connectNum 还是 allocToFrontConn
+		//return true 表示使用connectNum
+		if (this->get_useMasterAsSalve()) {
+			return true;
+		} else {
+			return this->get_useDatabaseConnectToBalace();
+		}
+	}
+
+	bool is_slaveUseDataBaseConnectNumToBalace() {
+		return this->get_useDatabaseConnectToBalace();
+	}
 };
 
 #define config() Config::get_config()
@@ -193,6 +233,7 @@ class Config: public ConfigBase{
 	declare_class_member_co(std::set<unsigned int>, oneproxyPortSet)
 	declare_class_member(bool, dumpData)
 	declare_class_member(bool, logSql)
+	declare_class_member(bool, logClientSql)
 	declare_class_member(bool, keepAlive)
 	declare_class_member(std::string, httpServerAddr)
 	declare_class_member(std::string, httpServerTitle)

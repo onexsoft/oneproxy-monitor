@@ -219,6 +219,7 @@ public:
 //	static int get_usVarChar(StringBuf& stringBuf, std::string& desStr);
 
 	static u_uint64 buffer2Integer(const void* buffer, const unsigned int len, bool is_littleEndian);
+	static u_uint64 buffer2Integer(const void* buffer, const unsigned int len);
 
 	static int get_string(StringBuf& stringBuf, std::string& desStr);//查找NULL结尾的字符串
 	static int get_byteDataByPosLen(StringBuf& stringBuf, StringBuf& desStr,

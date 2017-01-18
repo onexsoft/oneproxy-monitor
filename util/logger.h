@@ -58,6 +58,11 @@
 			Logger::get_logger()->log_force(fmt, ##args);\
 }while(0)
 
+#define logs_logsql_force(fmt, args...) do{\
+	Logger::get_logger()->log_force(fmt, ##args);\
+}while(0)
+
+
 #define logs_buf_unicodeStr(name, buf, bufLen) do{\
 	if (Logger::get_logger()->get_dumpData()) \
 		Logger::get_logger()->log_unicodeStr((char*)name, buf, bufLen); \

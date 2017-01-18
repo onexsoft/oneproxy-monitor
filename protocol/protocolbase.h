@@ -53,6 +53,52 @@
 #include "record.h"
 #include "tool.h"
 
+#include <sstream>
+#include <iostream>
+
+typedef std::map<unsigned int, void*> IntPointerMap;
+/***
+ * 结构体PreparedParamT和PreparedDataInfoT用于保存prepared中sql语句和sql语句参数的信息
+ **/
+typedef enum _prepared_param_type_t{
+	PARAM_TYPE_STRING,//是string类型的值，需要作为字符串处理
+	PARAM_TYPE_OTHER,//直接替换带原来的参数即可。
+}PreparedParamType;
+typedef struct _prepared_param_t{
+	std::string paramName;
+	PreparedParamType paramType;
+	unsigned int paramTypeI;
+	unsigned int paramStartPos;
+	unsigned int paramEndPos;
+	_prepared_param_t() {
+		this->paramType = PARAM_TYPE_OTHER;
+		this->paramEndPos = 0;
+		this->paramStartPos = 0;
+		this->paramTypeI = 0;
+	}
+}PreparedParamT;
+typedef struct _Prepared_data_info_t{
+	std::string sql;
+	unsigned int paramNum;//sql语句中的参数的数量
+#define MAX_PARAM_NUM 100 //假设最多100个参数
+	PreparedParamT param[MAX_PARAM_NUM];
+
+	std::vector<std::string> paramValueVec; //参数的值,位置应该与param中的位置一致
+
+	static _Prepared_data_info_t* create_instance() {
+		return new _Prepared_data_info_t();
+	}
+
+	void destory_instance() {
+		delete this;
+	}
+	void clear() {
+		this->sql.clear();
+		this->paramNum = 0;
+		this->paramValueVec.clear();
+	}
+}PreparedDataInfoT;
+
 typedef enum _protocol_handle_return_value_t{
 	HANDLE_RETURN_ERROR, //表示当前函数处理出现错误,框架会直接把数据转发到服务端的。
 	HANDLE_RETURN_SUCCESS, //表示当前函数成功处理，框架会调用下一个注册函数处理剩下的数据
@@ -166,6 +212,13 @@ protected:
 	virtual int set_oldSocketToPool(NetworkSocket* ns, ConnFinishType type);
 	//根据hashcode查找sql语句
 	virtual std::string get_sqlText(unsigned int hashCode);
+
+	//根据参数名称，标记参数在sql语句中的位置
+	virtual void mark_sqlParamPosition(PreparedDataInfoT& preparedDataInfot);
+	//把参数的值填充到原始sql语句中，并输出
+	virtual void fill_originSqlValue(const PreparedDataInfoT& preparedDataInfot, Connection& conn);
+	//输出回填值后的sql语句,用于sql审计功能
+	virtual void output_originSql(const std::string& sql, Connection& conn);
 };
 
 #endif /* PROTOCOL_PROTOCOLBASE_H_ */

@@ -231,6 +231,15 @@ void ClientThread::finished_connection(Connection *con, ConnFinishType type)
 	}
 
 	if (!servIsInEvent) {
+		if (con->database.slaveDataBase != NULL
+				&& !con->database.dataBaseGroup->is_slaveUseDataBaseConnectNumToBalace()) {
+			con->database.slaveDataBase->dec_allocToFrontConn();
+		}
+
+		if (con->database.masterDataBase != NULL
+				&& !con->database.dataBaseGroup->is_masterUseDataBaseConnectNumToBalace()) {
+			con->database.masterDataBase->dec_allocToFrontConn();
+		}
 		delete con;
 	}
 
