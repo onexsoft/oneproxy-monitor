@@ -151,7 +151,10 @@ void ConnectManager::alloc_task()
 			if (this->get_taskSize() > 0) {
 				NetworkSocket* ns = this->taskQueue.front();
 				this->taskQueue.pop();
-				ct->add_task2Queue(ns);
+				if (ct->write_socketPair(ns, sizeof(ns))) {
+					logs(Logger::ERR, "add client socket to thread error");
+					delete ns;
+				}
 				record()->record_outGlobalQueue();
 			}
 			mutexLock.unlock();
@@ -172,7 +175,10 @@ void ConnectManager::alloc_task()
 		mutexLock.unlock();
 
 		if (ns != NULL) {
-			ct->add_task2Queue(ns);
+			if (ct->write_socketPair(ns, sizeof(ns))) {
+				logs(Logger::ERR, "write client socket to thread error");
+				delete ns;
+			}
 			record()->record_outGlobalQueue();
 		}
 	}

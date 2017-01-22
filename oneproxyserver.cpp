@@ -78,7 +78,10 @@ void OneproxyServer::accept_clientRequest(NetworkSocket *clientSocket)
 	} else {
 		ClientThread* ct = this->connectManager->get_minTaskThread();
 		if (ct != NULL) {
-			ct->add_task2Queue(clientSocket);
+			if (ct->write_socketPair((void*)(&clientSocket), sizeof(clientSocket))) {
+				logs(Logger::ERR, "write client connection to thread(%llu) error", ct->get_threadId());
+				delete clientSocket;
+			}
 		} else {
 			this->connectManager->add_task(clientSocket);
 		}

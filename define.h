@@ -70,6 +70,8 @@ const int cf_listen_backlog = 128;
 #define strncmp_s(str1, str2) strncmp(str1.c_str(), str2.c_str(), str2.length())
 #define strncasecmp_c(str1, str2) strncasecmp((const char*)str1, (const char*)str2, strlen(str2))
 #define strncasecmp_s(str1, str2) strncasecmp(str1.c_str(), str2.c_str(), str2.length())
+#define strcasecmp_c(str1, str2) strcasecmp((const char*)str1, (const char*)str2)
+#define strcasecmp_s(str1, str2) strcasecmp((const char*)str1.c_str(), (const char*)str2.c_str())
 #define cmpdata(type, first, oper, second) ((type)(first) oper (type)(second))
 
 #define unlikely(x) __builtin_expect(!!(x), 0)

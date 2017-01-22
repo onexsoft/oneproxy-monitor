@@ -36,6 +36,9 @@
 #include "config.h"
 #include "tool.h"
 #include "strategyfactory.h"
+#include "sys/types.h"
+#include "sys/socket.h"
+#include "socketutil.h"
 //#include "google/profiler.h"
 
 #define close_fds(sock) do{\
@@ -56,6 +59,11 @@ ClientThread::ClientThread(ConnectManager* connManager, std::string threadName)
 {
 	this->connManager = connManager;
 	this->stop = false;
+
+	uif(socketpair(AF_LOCAL, SOCK_STREAM, 0, this->spfd)) {
+		logs(Logger::FATAL, "create socketpair error");
+	}
+
 	this->startThread(ClientThread::start, this);
 }
 
@@ -74,15 +82,6 @@ void ClientThread::set_stop()
 bool ClientThread::get_stop()
 {
 	return this->stop;
-}
-
-void ClientThread::add_task2Queue(NetworkSocket* ns)
-{
-	clientLock.lock();
-	this->taskQueue.push(ns);
-	clientLock.unlock();
-	taskStat.recv_connection();
-	record()->record_threadRecvConn(this->get_threadId());
 }
 
 unsigned int ClientThread::get_ConnectionNum()
@@ -135,6 +134,7 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 	NetworkSocket *cns = con->clins();
 	int ret = cns->read_data();
 	if (ret < 0) {
+		logs(Logger::WARNING, "read data error, close connection");
 		this->finished_connection(con, CONN_FINISHED_ERR);
 		return;
 	} else if (ret == 2) {
@@ -158,7 +158,7 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 	int tret = 0;
 	if ((tret = this->parse_frontDataPacket(con))) {
 		if (tret == -1) {
-			logs(Logger::ERR, "parse front data packet error, close the connection.");
+			logs(Logger::WARNING, "parse front data packet error, close the connection.");
 			this->finished_connection(con, CONN_FINISHED_ERR);
 		} else if (tret == 1) {
 			this->finished_connection(con, CONN_FINISHED_NORMAL);
@@ -388,12 +388,14 @@ void ClientThread::handle_readBackendData(unsigned int fd)
 
 	int ret = sns->read_data();
 	if (ret < 0) {
+		logs(Logger::WARNING, "read data error, close connection");
 		this->finished_connection(con, CONN_FINISHED_ERR);
 		return;
 	} else if (ret == 2) {
 		/***
 		 * 后端关闭，比如数据库强制关闭的情况。此时不能复用连接
 		 * **/
+		logs(Logger::WARNING, "backendend force close connection");
 		this->finished_connection(con, CONN_FINISHED_ERR);
 		return;
 	}
@@ -415,6 +417,7 @@ void ClientThread::handle_readBackendData(unsigned int fd)
 		if (tret == 1) {
 			this->finished_connection(con, CONN_FINISHED_NORMAL);
 		} else {
+			logs(Logger::WARNING, "parse backend data packet error");
 			this->finished_connection(con, CONN_FINISHED_ERR);
 		}
 		return ;
@@ -558,6 +561,7 @@ int ClientThread::write_data(Connection& con, bool isFront)
 				save_data_toSendData();
 				break;
 			} else if (ret) {//error
+				logs(Logger::WARNING, "write data error, close connection");
 				this->finished_connection(&con, CONN_FINISHED_ERR);
 				return -1;
 			} else {//write finished.
@@ -572,7 +576,7 @@ int ClientThread::write_data(Connection& con, bool isFront)
 			save_data_toSendData();
 			break;
 		} else uif (ret) {
-			logs(Logger::ERR, "write data to (%d) error", desSocket.get_fd());
+			logs(Logger::WARNING, "write data to (%d) error", desSocket.get_fd());
 			this->finished_connection(&con, CONN_FINISHED_ERR);
 			return -1;
 		} else {//写数据完毕
@@ -607,22 +611,6 @@ void ClientThread::remove_connectFdRelation(unsigned int fd)
 	logs(Logger::DEBUG, "remove fd(%d) to connectTypeMap(size:%d)", fd, this->connectTypeMap.size());
 }
 
-void ClientThread::handle_taskQueue()
-{
-	if (this->taskQueue.size() <= 0)
-		return;
-
-	NetworkSocket* ns = NULL;
-	this->clientLock.lock();
-	while(this->taskQueue.size() > 0) {//batch add task to epoll.
-		ns = this->taskQueue.front();
-		this->taskQueue.pop();
-		if (ns != NULL)
-			this->add_task(ns);
-	}
-	this->clientLock.unlock();
-}
-
 void ClientThread::add_FailConnQueue(Connection* conn)
 {
 	lif(conn && conn->sock.curclins)
@@ -644,7 +632,7 @@ void ClientThread::handle_FailConnQueue()
 
 bool ClientThread::have_queueData()
 {
-	if (this->taskQueue.size() || this->FailConnQueue.size())
+	if (this->FailConnQueue.size())
 		return true;
 	return false;
 }
@@ -653,22 +641,22 @@ void ClientThread::handle_queueData()
 {
 	if (this->FailConnQueue.size())
 		this->handle_FailConnQueue();
-
-	if (this->taskQueue.size())
-		this->handle_taskQueue();
 }
 
 void ClientThread::check_connectionTimeout() {
 	Connection* conn = NULL;
 	ConnectionTypeMap::iterator it = this->connectTypeMap.begin();
+	u_uint64 tmpat = 0;
 	for (; it != this->connectTypeMap.end(); ++it) {
 		if ((config()->get_globalSecondTime() - it->second->activeTime) > (u_uint64)(config()->get_connectTimeOut())) {//one day
 			conn = it->second;
+			tmpat = it->second->activeTime;
 			break;//one time, close one connection.
 		}
 	}
 	if (conn != NULL) {
-		logs(Logger::WARNING, "timeout close client fd: %d", conn->sock.curclins->get_fd());
+		logs(Logger::WARNING, "timeout close client fd: %d, globalSecondTime: %lld, tmpat: %lld",
+				conn->sock.curclins->get_fd(), config()->get_globalSecondTime(), tmpat);
 		this->finished_connection(conn, CONN_FINISHED_ERR);
 	}
 }
@@ -676,6 +664,25 @@ void ClientThread::check_connectionTimeout() {
 unsigned int ClientThread::get_threadTaskNum()
 {
 	return taskStat.sum_connection();
+}
+
+int ClientThread::get_socketPairReadFd()
+{
+	return this->spfd[0];
+}
+
+int ClientThread::get_socketPairWriteFd()
+{
+	return this->spfd[1];
+}
+
+int ClientThread::write_socketPair(const void* data, const unsigned int dataLen)
+{
+	uif(SocketUtil::socket_writeData(this->get_socketPairWriteFd(), data, dataLen, 500)) {
+		logs(Logger::ERR, "write data error");
+		return -1;
+	}
+	return 0;
 }
 
 void ClientThread::rw_frontData(unsigned int fd, unsigned int events, void* args)
@@ -718,10 +725,45 @@ void ClientThread::rw_backendData(unsigned int fd, unsigned int events, void *ar
 	}
 }
 
+void ClientThread::read_clientSocket(unsigned int fd, unsigned int events, void* args)
+{
+	ClientThread* ct = (ClientThread*)args;
+	StringBuf sb;
+	union {
+		NetworkSocket* ns;
+		long l;
+	} d;
+
+	if (SocketUtil::socket_readAllData(ct->get_socketPairReadFd(), sb, 500) < 0) {
+		logs(Logger::ERR, "read client connection error");
+		return;
+	}
+
+	unsigned int pl = sizeof(d.l);
+	while(sb.get_offset() < sb.length()) {
+
+		if (sb.get_remailLength() >= pl) {
+			memcpy(&d.l, sb.addr() + sb.get_offset(), pl);
+			sb.set_offset(sb.get_offset() + pl);
+		}
+
+		ct->taskStat.recv_connection();
+		record()->record_threadRecvConn(ct->get_threadId());
+
+		ct->add_task(d.ns);
+	}
+}
+
 thread_start_func(ClientThread::start)
 {
 //	ProfilerRegisterThread();
 	ClientThread *ct = (ClientThread*)args;
+	uif (ct == NULL)
+		return 0;
+
+	//add socket pair read end to epoll.
+	ct->ioEvent->add_ioEventRead(ct->get_socketPairReadFd(), ClientThread::read_clientSocket, ct);
+
 	unsigned int cntTime = 10;//5 second, check connection one times.
 	while(ct->get_stop() == false || ct->get_ConnectionNum() || ct->have_queueData()) {
 		if (ct->have_queueData()) {

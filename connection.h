@@ -179,6 +179,10 @@ typedef struct _session_data_t{
 	HandleManager preparedCursorManager;
 	stats::SqlInfo* sqlInfo;
 	stats::ClientQueryInfo* clientInfo;
+
+	std::string hostName;
+	std::string appName;
+
 	_session_data_t() {
 		this->sqlInfo = NULL;
 		this->clientInfo = NULL;

@@ -74,7 +74,7 @@ int Epoll::add_ioEvent(unsigned int fd, unsigned int event, Func func, void *arg
 	mutexLock.unlock();
 
 	struct epoll_event ev;
-	ev.data.ptr = NULL;
+//	ev.data.ptr = NULL;
 	ev.data.fd = fd;
 	if (event == (unsigned int)-1) {
 		ev.events = this->trigerMethod | EPOLLIN;

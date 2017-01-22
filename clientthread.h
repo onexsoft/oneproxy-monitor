@@ -43,24 +43,24 @@ typedef struct _client_task_stat_t{
 	unsigned int _wait_connection;
 	unsigned int _doing_connection;
 	unsigned int _fail_connection;
-	USpinLock m_lock;
+	//USpinLock m_lock;
 	_client_task_stat_t() {
 		this->_wait_connection = 0;
 		this->_doing_connection = 0;
 		this->_fail_connection = 0;
 	}
 	void recv_connection() {
-		m_lock.lock();
+		//m_lock.lock();
 		this->_wait_connection++;
-		m_lock.unlock();
+		//m_lock.unlock();
 	}
 	void close_connection() {
 		this->_doing_connection--;
 	}
 	void doing_connection() {
-		m_lock.lock();
+		//m_lock.lock();
 		this->_wait_connection--;
-		m_lock.unlock();
+		//m_lock.unlock();
 		this->_doing_connection++;
 	}
 	void done_connection() {
@@ -88,8 +88,10 @@ public:
 	~ClientThread();
 	void set_stop();
 	bool get_stop();
-	void add_task2Queue(NetworkSocket* ns);
 	unsigned int get_threadTaskNum();
+	int get_socketPairReadFd();
+	int get_socketPairWriteFd();
+	int write_socketPair(const void* data, const unsigned int dataLen);
 
 private:
 	//check connection is timeout or not
@@ -122,6 +124,7 @@ private:
 	static thread_start_func(start);
 	static void rw_frontData(unsigned int fd, unsigned int events, void* args);
 	static void rw_backendData(unsigned int fd, unsigned int events, void* args);
+	static void read_clientSocket(unsigned int fd, unsigned int events, void* args);
 private:
 	declare_type_alias(ConnectionTypeMap, std::map<unsigned int, Connection*>)
 	IoEvent *ioEvent;
@@ -130,9 +133,11 @@ private:
 	MutexLock clientLock;
 	bool stop;
 
-	std::queue<NetworkSocket*> taskQueue;
+//	std::queue<NetworkSocket*> taskQueue;
 	std::queue<Connection*> FailConnQueue;
 	ClientTaskStat taskStat;
+	int spfd[2];
+
 };
 
 #endif /* CLIENTTHREAD_H_ */

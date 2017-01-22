@@ -254,7 +254,9 @@ int ProtocolBase::protocol_createBackendConnect(Connection& conn)
 			conn.servns() = ns;
 
 			if (conn.curdb()->get_connectNum() >= conn.curdb()->get_connectNumLimit()) {
-				logs(Logger::WARNING, "current connect num > connect num limit");
+				logs(Logger::ERR, "current connect num(%d) > connect num limit(%d)",
+						conn.curdb()->get_connectNum(),
+						conn.curdb()->get_connectNumLimit());
 				return -1;
 			}
 
@@ -685,7 +687,17 @@ void ProtocolBase::output_originSql(const std::string& sql, Connection& conn)
 		ss << client->get_address();
 		ss << ":";
 		ss << client->get_port();
-		ss << "] ";
+		ss << "]";
+		if (conn.sessData.hostName.length() > 0) {
+			ss << "[";
+			ss << conn.sessData.hostName;
+			ss << "]";
+		}
+		if (conn.sessData.appName.length() > 0) {
+			ss << "[";
+			ss << conn.sessData.appName;
+			ss << "] ";
+		}
 		ss << sql;
 		logs_logsql_force("%s", ss.str().c_str());
 	} else {

@@ -1468,9 +1468,9 @@ void SqlParser::show_tokens(int start, int end)
 	if (end <= 0 || end > this->tokenCount())
 		end = this->tokenCount();
 
-	logs(Logger::DEBUG, "start: %d, end: %d", start, end);
+	logs(Logger::ERR, "start: %d, end: %d", start, end);
 	for (int i = start; i < end; ++i) {
 		sql_token* tok = token(i);
-		logs(Logger::DEBUG, "tokenid: %d, token: %s, type: %s\n",tok->token_id, tok->text.c_str(), tokenInfos[tok->token_id].text);
+		logs(Logger::ERR, "tokenid: %d, token: %s\n",tok->token_id, tok->text.c_str());
 	}
 }
