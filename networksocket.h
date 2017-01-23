@@ -96,6 +96,7 @@ public:
 		this->m_bufPointer = NULL;
 		this->m_dataBase = NULL;
 		this->m_status = SOCKET_STATUS_WORKING_T;
+		this->m_address.clear();
 	}
 	NetworkSocket(std::string address, int port) {
 		this->m_address = address;

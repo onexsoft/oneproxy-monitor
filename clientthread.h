@@ -98,7 +98,7 @@ private:
 	void check_connectionTimeout();
 	unsigned int get_ConnectionNum();
 	int add_task(NetworkSocket* ns);
-	void handle_readFrontData(unsigned int fd);
+	void handle_readFrontData(Connection& con);
 	void finished_connection(Connection* con, ConnFinishType type);
 	void get_serverFailed(Connection *con);
 	int alloc_server(Connection* con);
@@ -106,16 +106,16 @@ private:
 	//从数据库组中分配数据库
 	int get_databaseFromGroup(Connection& con);
 
-	void handle_readBackendData(unsigned int fd);
+	void handle_readBackendData(Connection& con);
 	int parse_backendDataPacket(Connection* con);
 
 	int send_data(Connection& conn, bool sendToClient = true);
 	//当isFront为true时，表示向前端套接字写数据，否则表示向后端套接字写数据
 	int write_data(Connection& con, bool isFront);
-	Connection* get_connection(unsigned int fd);
-	void add_connectFdRelation(unsigned int fd, Connection* con);
-	void remove_connectFdRelation(unsigned int fd);
-	void handle_taskQueue();
+//	Connection* get_connection(unsigned int fd);
+//	void add_connectFdRelation(unsigned int fd, Connection* con);
+//	void remove_connectFdRelation(unsigned int fd);
+//	void handle_taskQueue();
 	void add_FailConnQueue(Connection* conn);
 	void handle_FailConnQueue();
 	bool have_queueData();
@@ -126,10 +126,12 @@ private:
 	static void rw_backendData(unsigned int fd, unsigned int events, void* args);
 	static void read_clientSocket(unsigned int fd, unsigned int events, void* args);
 private:
-	declare_type_alias(ConnectionTypeMap, std::map<unsigned int, Connection*>)
+//	declare_type_alias(ConnectionTypeMap, std::map<unsigned int, Connection*>)
+	declare_type_alias(ConnectionList, std::list<Connection*>)
 	IoEvent *ioEvent;
 	ConnectManager *connManager;
-	ConnectionTypeMap connectTypeMap;
+//	ConnectionTypeMap connectTypeMap;
+	ConnectionList connectList;
 	MutexLock clientLock;
 	bool stop;
 
@@ -137,7 +139,6 @@ private:
 	std::queue<Connection*> FailConnQueue;
 	ClientTaskStat taskStat;
 	int spfd[2];
-
 };
 
 #endif /* CLIENTTHREAD_H_ */

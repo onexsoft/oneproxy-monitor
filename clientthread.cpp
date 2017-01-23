@@ -43,14 +43,8 @@
 
 #define close_fds(sock) do{\
 	this->ioEvent->del_ioEvent(sock->get_fd());\
-	this->remove_connectFdRelation(sock->get_fd());\
 	delete sock;\
 	sock = NULL;\
-}while(0)
-
-#define close_ioEvent(sock) do{\
-	this->ioEvent->del_ioEvent(sock->get_fd());\
-	this->remove_connectFdRelation(sock->get_fd());\
 }while(0)
 
 ClientThread::ClientThread(ConnectManager* connManager, std::string threadName)
@@ -86,7 +80,8 @@ bool ClientThread::get_stop()
 
 unsigned int ClientThread::get_ConnectionNum()
 {
-	return this->connectTypeMap.size();
+	return this->connectList.size();
+//	return this->connectTypeMap.size();
 }
 
 int ClientThread::add_task(NetworkSocket* ns)
@@ -99,12 +94,14 @@ int ClientThread::add_task(NetworkSocket* ns)
 	conn->activeTime = config()->get_globalSecondTime();//use global time, decrease call system api
 	conn->clins() = ns;
 	conn->sessData.clientInfo = record()->record_getClientQueryInfo(ns->get_addressHashCode());
-	this->add_connectFdRelation(ns->get_fd(), conn);
+	conn->clientThreadObj = (void*)this;
+	//this->add_connectFdRelation(ns->get_fd(), conn);
 
 	logs(Logger::DEBUG, "add client fd(%d) to ioevent", ns->get_fd());
-	if (this->ioEvent->add_ioEventRead(ns->get_fd(), ClientThread::rw_frontData, this)) {
+//	logs(Logger::ERR, "conn: %p", conn);
+	if (this->ioEvent->add_ioEventRead(ns->get_fd(), ClientThread::rw_frontData, conn)) {
 		logs(Logger::ERR, "add ioEventRead error, fd: %d", ns->get_fd());
-		this->remove_connectFdRelation(ns->get_fd());
+		//this->remove_connectFdRelation(ns->get_fd());
 		record()->record_closeClientConn();
 		record()->record_threadFailConn(this->get_threadId());
 		taskStat.close_connection();
@@ -116,32 +113,39 @@ int ClientThread::add_task(NetworkSocket* ns)
 	//记录此线程开始处理任务
 	record()->record_threadStartHandingConn(this->get_threadId());
 	taskStat.doing_connection();
+	connectList.push_back(conn);
 	return 0;
 }
 
-void ClientThread::handle_readFrontData(unsigned int fd)
+void ClientThread::handle_readFrontData(Connection& conn)
 {
-	logs(Logger::DEBUG, "handle_readFrontData(%d)", fd);
-	//1. get connection struct from map
-	Connection* con = this->get_connection(fd);
-	if (con == NULL) {
-		logs(Logger::ERR, "fd(%d) do not in connectionTypeMap error", fd);
+	uif (conn.sock.curclins == NULL)
 		return;
-	}
-	con->activeTime = config()->get_globalSecondTime();
+	logs(Logger::DEBUG, "handle_readFrontData(%d)", conn.sock.curclins->get_fd());
+
+	//1. get connection struct from map
+//	Connection* con = this->get_connection(fd);
+//	if (con == NULL) {
+//		logs(Logger::ERR, "fd(%d) do not in connectionTypeMap error", fd);
+//		return;
+//	}
+	conn.activeTime = config()->get_globalSecondTime();
 
 	//2.read data from front socket
-	NetworkSocket *cns = con->clins();
+	NetworkSocket *cns = conn.clins();
 	int ret = cns->read_data();
 	if (ret < 0) {
 		logs(Logger::WARNING, "read data error, close connection");
-		this->finished_connection(con, CONN_FINISHED_ERR);
+		this->finished_connection(&conn, CONN_FINISHED_ERR);
 		return;
-	} else if (ret == 2) {
+	} else if (ret == 2 && cns->get_recvData().get_remailLength() <= 0) {
 		/**
 		 * 客户端强制关闭，服务端的状态可能不正确，是否复用由底层协议决定
+		 * 如果是获取后端失败，重试的情况下，前端socket没有数据，但是socket已经在上次读取到数据了
+		 * 需要从新进行处理。
+		 * bug: 由于进行读写分离的情况下，把recvData中的数据进行了清理，可能导致bug。需要检查确定。
 		 * **/
-		this->finished_connection(con, CONN_FINISHED_FRONT_CLOSE);
+		this->finished_connection(&conn, CONN_FINISHED_FRONT_CLOSE);
 		return;
 	}
 
@@ -151,29 +155,30 @@ void ClientThread::handle_readFrontData(unsigned int fd)
 		return;
 	}
 	logs(Logger::DEBUG, "fd(%d) send (%d) bytes data to backend, clientHashCode: %u",
-			fd, cnsRecvBuf.get_length(), con->sock.curclins->get_addressHashCode());
+			conn.sock.curclins->get_fd(), cnsRecvBuf.get_length(),
+			conn.sock.curclins->get_addressHashCode());
 	logs_buf((char*)"front =====> backend", (void*)cnsRecvBuf.get_buf(), cnsRecvBuf.get_length());
 
 	//3. analyse current data
 	int tret = 0;
-	if ((tret = this->parse_frontDataPacket(con))) {
+	if ((tret = this->parse_frontDataPacket(&conn))) {
 		if (tret == -1) {
 			logs(Logger::WARNING, "parse front data packet error, close the connection.");
-			this->finished_connection(con, CONN_FINISHED_ERR);
+			this->finished_connection(&conn, CONN_FINISHED_ERR);
 		} else if (tret == 1) {
-			this->finished_connection(con, CONN_FINISHED_NORMAL);
+			this->finished_connection(&conn, CONN_FINISHED_NORMAL);
 		}
 		return;
 	}
 
 	//4. if current socket is not connection to server, alloc server
-	if (cnsRecvBuf.get_remailLength() > 0 && this->alloc_server(con)) {
-		logs(Logger::ERR, "connect to server error, fd: %d", fd);
+	if (cnsRecvBuf.get_remailLength() > 0 && this->alloc_server(&conn)) {
+		logs(Logger::ERR, "connect to server error, fd: %d", conn.sock.curclins->get_fd());
 		return;
 	}
 
 	//5. write data to server
-	this->send_data(*con, false);
+	this->send_data(conn, false);
 }
 
 void ClientThread::finished_connection(Connection *con, ConnFinishType type)
@@ -213,14 +218,16 @@ void ClientThread::finished_connection(Connection *con, ConnFinishType type)
 	bool servIsInEvent = false;
 	if (msns && msns->get_status() == SOCKET_STATUS_WORKING_T) {
 		logs(Logger::DEBUG, "close master socked(%d)", msns->get_fd());
-		close_ioEvent(msns);
+		this->ioEvent->del_ioEvent(msns->get_fd());
+//		close_ioEvent(msns);
 	} else if (msns) {
 		servIsInEvent = true;
 	}
 
 	if (ssns && ssns->get_status() == SOCKET_STATUS_WORKING_T) {
 		logs(Logger::DEBUG, "close slave socket(%d)", ssns->get_fd());
-		close_ioEvent(ssns);
+//		close_ioEvent(ssns);
+		this->ioEvent->del_ioEvent(ssns->get_fd());
 	} else if (ssns) {
 		servIsInEvent = true;
 	}
@@ -240,6 +247,8 @@ void ClientThread::finished_connection(Connection *con, ConnFinishType type)
 				&& !con->database.dataBaseGroup->is_masterUseDataBaseConnectNumToBalace()) {
 			con->database.masterDataBase->dec_allocToFrontConn();
 		}
+
+		this->connectList.remove(con);
 		delete con;
 	}
 
@@ -288,9 +297,9 @@ int ClientThread::alloc_server(Connection* con)
 			get_serverFailed(con);
 			return -1;
 		}
-		this->add_connectFdRelation(con->servns()->get_fd(), con);
+//		this->add_connectFdRelation(con->servns()->get_fd(), con);
 		logs(Logger::INFO, "add server fd(%d) to epoll", con->servns()->get_fd());
-		this->ioEvent->add_ioEventRead(con->servns()->get_fd(), ClientThread::rw_backendData, this);
+		this->ioEvent->add_ioEventRead(con->servns()->get_fd(), ClientThread::rw_backendData, con);
 	}
 
 	if (con->sock.curservs == con->sock.masters && con->sock.masters != NULL) {
@@ -369,43 +378,47 @@ int ClientThread::get_databaseFromGroup(Connection& con)
 	return StrategyFactory::get_strategy()->get_databaseFromGroup(con);
 }
 
-void ClientThread::handle_readBackendData(unsigned int fd)
+void ClientThread::handle_readBackendData(Connection& conn)
 {
-	logs(Logger::INFO, "handle_readBackendData(%d)", fd);
-	//1. get connection from map
-	Connection* con = NULL;
-	if ((con = this->get_connection(fd)) == NULL) {
-		logs(Logger::INFO, "no fd(%d) in connectTypeMap", fd);
+	if (conn.sock.curservs == NULL)
 		return;
-	}
-	con->activeTime = config()->get_globalSecondTime();
-	logs(Logger::DEBUG, "fd: %d, activeTime: %llu", fd, con->activeTime);
+	unsigned int fd = conn.sock.curservs->get_fd();
+	logs(Logger::INFO, "handle_readBackendData(%d)", fd);
+//
+//	//1. get connection from map
+//	Connection* con = NULL;
+//	if ((con = this->get_connection(fd)) == NULL) {
+//		logs(Logger::INFO, "no fd(%d) in connectTypeMap", fd);
+//		return;
+//	}
+	conn.activeTime = config()->get_globalSecondTime();
+	logs(Logger::DEBUG, "fd: %d, activeTime: %llu", fd, conn.activeTime);
 
 	//2. read data from backend
-	NetworkSocket *sns = con->sock.get_curServSock();
+	NetworkSocket *sns = conn.sock.get_curServSock();
 	if (sns == NULL)
 		return;
 
 	int ret = sns->read_data();
 	if (ret < 0) {
 		logs(Logger::WARNING, "read data error, close connection");
-		this->finished_connection(con, CONN_FINISHED_ERR);
+		this->finished_connection(&conn, CONN_FINISHED_ERR);
 		return;
 	} else if (ret == 2) {
 		/***
 		 * 后端关闭，比如数据库强制关闭的情况。此时不能复用连接
 		 * **/
 		logs(Logger::WARNING, "backendend force close connection");
-		this->finished_connection(con, CONN_FINISHED_ERR);
+		this->finished_connection(&conn, CONN_FINISHED_ERR);
 		return;
 	}
 	if (sns->get_recvData().get_length() == 0) {
 		return;
 	}
 
-	if (con->sock.curclins != NULL) {//when in the case that clean backend socket
+	if (conn.sock.curclins != NULL) {//when in the case that clean backend socket
 		logs(Logger::DEBUG, "fd(%d) send (%d) bytes data to front, clientHashCode: %u",
-				fd,  sns->get_recvData().get_length(), con->sock.curclins->get_addressHashCode());
+				fd,  sns->get_recvData().get_length(), conn.sock.curclins->get_addressHashCode());
 	} else {
 		logs(Logger::DEBUG, "fd(%d) send(%d)bytes data to oneproxy", fd, sns->get_recvData().get_length());
 	}
@@ -413,18 +426,18 @@ void ClientThread::handle_readBackendData(unsigned int fd)
 
 	//3. parse backend packet
 	int tret = 0;
-	if ((tret = this->parse_backendDataPacket(con))) {
+	if ((tret = this->parse_backendDataPacket(&conn))) {
 		if (tret == 1) {
-			this->finished_connection(con, CONN_FINISHED_NORMAL);
+			this->finished_connection(&conn, CONN_FINISHED_NORMAL);
 		} else {
 			logs(Logger::WARNING, "parse backend data packet error");
-			this->finished_connection(con, CONN_FINISHED_ERR);
+			this->finished_connection(&conn, CONN_FINISHED_ERR);
 		}
 		return ;
 	}
 
 	//4. send data
-	this->send_data(*con, true);
+	this->send_data(conn, true);
 }
 
 int ClientThread::parse_backendDataPacket(Connection* con) {
@@ -567,7 +580,7 @@ int ClientThread::write_data(Connection& con, bool isFront)
 			} else {//write finished.
 				sendData.clear();
 				if (sSocket != NULL)
-					this->ioEvent->add_ioEventRead(sSocket->get_fd(), sFunc, this);
+					this->ioEvent->add_ioEventRead(sSocket->get_fd(), sFunc, &con);
 			}
 		}
 
@@ -581,7 +594,7 @@ int ClientThread::write_data(Connection& con, bool isFront)
 			return -1;
 		} else {//写数据完毕
 			logs(Logger::INFO, "write finished ...");
-			this->ioEvent->add_ioEventRead(desSocket.get_fd(), func, this);
+			this->ioEvent->add_ioEventRead(desSocket.get_fd(), func, &con);
 			break;
 		}
 	} while(0);
@@ -589,27 +602,27 @@ int ClientThread::write_data(Connection& con, bool isFront)
 	return 0;
 }
 
-Connection* ClientThread::get_connection(unsigned int fd)
-{
-	Connection* conn = NULL;
-	ClientThread::ConnectionTypeMap::iterator it = this->connectTypeMap.find(fd);
-	if (it != this->connectTypeMap.end()) {
-		conn = it->second;
-	} else {
-		logs(Logger::INFO, "no fd(%d) in connectTypeMap(%d)", fd, this->connectTypeMap.size());
-	}
-	return conn;
-}
+//Connection* ClientThread::get_connection(unsigned int fd)
+//{
+//	Connection* conn = NULL;
+//	ClientThread::ConnectionTypeMap::iterator it = this->connectTypeMap.find(fd);
+//	if (it != this->connectTypeMap.end()) {
+//		conn = it->second;
+//	} else {
+//		logs(Logger::INFO, "no fd(%d) in connectTypeMap(%d)", fd, this->connectTypeMap.size());
+//	}
+//	return conn;
+//}
 
-void ClientThread::add_connectFdRelation(unsigned int fd, Connection* con) {
-	this->connectTypeMap[fd] = con;
-}
+//void ClientThread::add_connectFdRelation(unsigned int fd, Connection* con) {
+//	this->connectTypeMap[fd] = con;
+//}
 
-void ClientThread::remove_connectFdRelation(unsigned int fd)
-{
-	this->connectTypeMap.erase(fd);
-	logs(Logger::DEBUG, "remove fd(%d) to connectTypeMap(size:%d)", fd, this->connectTypeMap.size());
-}
+//void ClientThread::remove_connectFdRelation(unsigned int fd)
+//{
+//	this->connectTypeMap.erase(fd);
+//	logs(Logger::DEBUG, "remove fd(%d) to connectTypeMap(size:%d)", fd, this->connectTypeMap.size());
+//}
 
 void ClientThread::add_FailConnQueue(Connection* conn)
 {
@@ -624,7 +637,7 @@ void ClientThread::handle_FailConnQueue()
 		Connection* conn = FailConnQueue.front();
 		FailConnQueue.pop();
 		if (conn && conn->sock.curclins) {
-			this->handle_readFrontData(conn->sock.curclins->get_fd());
+			this->handle_readFrontData(*conn);
 			taskStat.retry_failConnection();
 		}
 	}
@@ -644,19 +657,22 @@ void ClientThread::handle_queueData()
 }
 
 void ClientThread::check_connectionTimeout() {
+
 	Connection* conn = NULL;
-	ConnectionTypeMap::iterator it = this->connectTypeMap.begin();
 	u_uint64 tmpat = 0;
-	for (; it != this->connectTypeMap.end(); ++it) {
-		if ((config()->get_globalSecondTime() - it->second->activeTime) > (u_uint64)(config()->get_connectTimeOut())) {//one day
-			conn = it->second;
-			tmpat = it->second->activeTime;
+	u_uint64 gst = config()->get_globalSecondTime();
+	ConnectionList::iterator it = this->connectList.begin();
+
+	for (; it != this->connectList.end(); ++it) {
+		if ((gst - (*it)->activeTime) > (u_uint64)(config()->get_connectTimeOut())) {//one day
+			conn = *it;
+			tmpat = (*it)->activeTime;
 			break;//one time, close one connection.
 		}
 	}
 	if (conn != NULL) {
 		logs(Logger::WARNING, "timeout close client fd: %d, globalSecondTime: %lld, tmpat: %lld",
-				conn->sock.curclins->get_fd(), config()->get_globalSecondTime(), tmpat);
+				conn->sock.curclins->get_fd(), gst, tmpat);
 		this->finished_connection(conn, CONN_FINISHED_ERR);
 	}
 }
@@ -687,18 +703,23 @@ int ClientThread::write_socketPair(const void* data, const unsigned int dataLen)
 
 void ClientThread::rw_frontData(unsigned int fd, unsigned int events, void* args)
 {
-	ClientThread* ct = (ClientThread*)args;
+	Connection* conn = (Connection*)args;
+	ClientThread* ct = (ClientThread*)conn->clientThreadObj;
+//	logs(Logger::ERR, "conn: %p", conn);
+	assert(conn != NULL);
+	assert(ct != NULL);
+
 	logs(Logger::INFO, "front fd(%d) have data to read", fd);
 	config()->update_globalTime();
 	if (ct->ioEvent->is_readEvent(events)) {
-		ct->handle_readFrontData(fd);
+		ct->handle_readFrontData(*conn);
 	} else if (ct->ioEvent->is_writeEvent(events)) {
-		Connection* con = NULL;
-		if ((con = ct->get_connection(fd)) == NULL) {
-			logs(Logger::ERR, "no fd(%d) in connectTypeMap", fd);
-			return;
-		}
-		ct->write_data(*con, true);
+//		Connection* con = NULL;
+//		if ((con = ct->get_connection(fd)) == NULL) {
+//			logs(Logger::ERR, "no fd(%d) in connectTypeMap", fd);
+//			return;
+//		}
+		ct->write_data(*conn, true);
 	} else {
 		logs(Logger::ERR, "unknow events(%d)", events);
 	}
@@ -706,20 +727,24 @@ void ClientThread::rw_frontData(unsigned int fd, unsigned int events, void* args
 
 void ClientThread::rw_backendData(unsigned int fd, unsigned int events, void *args)
 {
-	ClientThread* ct = (ClientThread*)args;
+	Connection* conn = (Connection*)args;
+	ClientThread* ct = (ClientThread*)conn->clientThreadObj;
+	assert(conn != NULL);
+	assert(ct != NULL);
+
 	logs(Logger::INFO, "backend fd(%d) have data to read, events(%d)", fd, events);
 	config()->update_globalTime();
 	if (ct->ioEvent->is_readEvent(events)) {
 		logs(Logger::DEBUG, "is_readEvent");
-		ct->handle_readBackendData(fd);
+		ct->handle_readBackendData(*conn);
 	} else if (ct->ioEvent->is_writeEvent(events)) {
 		logs(Logger::DEBUG, "is_writeEvent");
-		Connection* con = NULL;
-		if ((con = ct->get_connection(fd)) == NULL) {
-			logs(Logger::ERR, "no fd(%d) in connectTypeMap", fd);
-			return;
-		}
-		ct->write_data(*con, false);
+//		Connection* con = NULL;
+//		if ((con = ct->get_connection(fd)) == NULL) {
+//			logs(Logger::ERR, "no fd(%d) in connectTypeMap", fd);
+//			return;
+//		}
+		ct->write_data(*conn, false);
 	} else {
 		logs(Logger::ERR, "unknow events(%d)", events);
 	}
@@ -765,7 +790,7 @@ thread_start_func(ClientThread::start)
 	ct->ioEvent->add_ioEventRead(ct->get_socketPairReadFd(), ClientThread::read_clientSocket, ct);
 
 	unsigned int cntTime = 10;//5 second, check connection one times.
-	while(ct->get_stop() == false || ct->get_ConnectionNum() || ct->have_queueData()) {
+	while(ct->get_stop() == false || ct->get_threadTaskNum() || ct->have_queueData()) {
 		if (ct->have_queueData()) {
 			ct->ioEvent->run_loopWithTimeout(0);
 			ct->handle_queueData();
