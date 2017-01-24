@@ -73,9 +73,9 @@ thread_start_func(HttpServer::start)
 		return 0;
 	}
 
-	while(hs->isStop == false){
-		hs->run_server(500);
-	}
+	hs->get_ioEvent().regester_checkQuit();
+	hs->get_ioEvent().run_loop();
+
 	return 0;
 }
 

@@ -125,7 +125,6 @@ private:
 	static void read_clientSocket(unsigned int fd, unsigned int events, void* args);
 	static void check_connectionTimeout(void* args);
 	static void retry_failedConnection(void* args);
-	static void check_quit(void* args);
 
 private:
 	declare_type_alias(ConnectionList, std::list<Connection*>)

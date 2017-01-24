@@ -11,9 +11,10 @@ $(shell if [ ! -d $(BUILD)/$(BUILD_TEST_BIN) ]; then mkdir -p $(BUILD)/$(BUILD_T
 	INSTALLDIR = /usr/local/superoneproxy/
 	LDFLAGS = 
 	OPENSSL = /usr/local/openssl
+	LIBEV = /usr/local/libev
 	# -lprofiler -lunwind ./libtcmalloc_minimal.a
-	LIBS = -pthread ./libtcmalloc_minimal.a ./stats/libsqlite3.a ./libgmp.a $(OPENSSL)/lib/libssl.a $(OPENSSL)/lib/libcrypto.a -ldl
-	INCLUDE = -I$(OPENSSL)/include
+	LIBS = -pthread ./libtcmalloc_minimal.a ./stats/libsqlite3.a ./libgmp.a $(OPENSSL)/lib/libssl.a $(OPENSSL)/lib/libcrypto.a $(LIBEV)/lib/libev.a -ldl
+	INCLUDE = -I$(OPENSSL)/include -I$(LIBEV)/include
 endif
 
 CXXFLAGS = -Wall -Wformat=0 -Wno-strict-aliasing -g

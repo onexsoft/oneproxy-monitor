@@ -73,6 +73,7 @@ ClientThread::~ClientThread()
 void ClientThread::set_stop()
 {
 	this->stop = true;
+	this->ioEvent->stop_event();
 }
 
 bool ClientThread::get_stop()
@@ -726,15 +727,6 @@ void ClientThread::retry_failedConnection(void* args)
 	ct->handle_readFrontData(*conn);
 }
 
-void ClientThread::check_quit(void* args)
-{
-	ClientThread* ct = (ClientThread*)args;
-	if (ct->get_stop() == false || ct->get_threadTaskNum()) {
-		return;
-	}
-	ct->ioEvent->stop_loop();
-}
-
 thread_start_func(ClientThread::start)
 {
 //	ProfilerRegisterThread();
@@ -746,8 +738,7 @@ thread_start_func(ClientThread::start)
 	ct->ioEvent->add_ioEventRead(ct->get_socketPairReadFd(), ClientThread::read_clientSocket, ct);
 	//check connection is timeout or not
 	ct->ioEvent->add_timerEvent(10.0, 10.0, ClientThread::check_connectionTimeout, ct);
-	//check quit or not
-	ct->ioEvent->add_timerEvent(1.0, 1.0, ClientThread::check_quit, ct);//检查是否退出
+	ct->ioEvent->regester_checkQuit();
 	ct->ioEvent->run_loop();
 
 	return 0;

@@ -182,20 +182,14 @@ int IOEv::add_timerEvent(double after, double repeat, TimerFunc func, void* args
 	return 0;
 }
 
-void IOEv::run_loopWithTimeout(int epollTimeout)
-{
-	ev_run(this->m_loop, EVRUN_NOWAIT);
-}
-
 void IOEv::run_loop() {
 	ev_run(this->m_loop, 0);
 }
 
-void IOEv::run_once() {
-	ev_run(this->m_loop, EVRUN_ONCE);
+void IOEv::stop_loop() {
+	ev_break(this->m_loop, EVBREAK_ALL);
 }
 
-void IOEv::stop_loop() {
-	this->is_stop();
-	ev_break(this->m_loop, EVBREAK_ALL);
+void IOEv::regester_checkQuit() {
+	this->add_timerEvent(1.0, 1.0, IoEvent::check_quit, this);
 }

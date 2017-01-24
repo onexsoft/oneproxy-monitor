@@ -55,10 +55,9 @@ public:
 	virtual int add_timerEvent(double after, double repeat, TimerFunc func, void* args);
 
 	//run,ms
-	virtual void run_loopWithTimeout(int epollTimeout);
 	virtual void run_loop();
-	virtual void run_once();
 	virtual void stop_loop();
+	virtual void regester_checkQuit();
 private:
 	struct ev_loop *m_loop;
 	int m_timerId;

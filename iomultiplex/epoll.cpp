@@ -160,6 +160,12 @@ void Epoll::del_ioEvent(unsigned int fd)
 	mutexLock.unlock();
 }
 
+void Epoll::run_loop() {
+	while(this->is_stop() == false) {
+		this->run_loopWithTimeout(-1);
+	}
+}
+
 void Epoll::run_loopWithTimeout(int epollTimeout)
 {
 	run_eventWait(epollTimeout);

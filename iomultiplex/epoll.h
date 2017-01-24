@@ -56,17 +56,15 @@ public:
 	virtual bool is_writeEvent(unsigned int event);
 	//remove fd event
 	virtual void del_ioEvent(unsigned int fd);
+	virtual void run_loop();
+private:
+	void run_eventWait(int epollTimeout);
 	//run,ms
 	virtual void run_loopWithTimeout(int epollTimeout);
 private:
-	void run_eventWait(int epollTimeout);
-
-private:
 	unsigned int trigerMethod;//EPOLLET or EPOLLLT, default EPOLLET
 	unsigned int epfd;
-
 	MutexLock mutexLock;
-
 	const int maxEvents;
 };
 

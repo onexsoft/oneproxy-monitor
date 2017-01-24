@@ -48,22 +48,6 @@ void IoEvent::destory_instance()
 	delete this;
 }
 
-void IoEvent::run_loop(int epollTimeout) {
-	while(false == this->is_stop()) {
-		this->run_loopWithTimeout(epollTimeout);
-	}
-}
-
-void IoEvent::run_loop() {
-	while(false == this->is_stop()) {
-		this->run_loopWithTimeout(-1);
-	}
-}
-
-void IoEvent::run_once() {
-	this->run_loopWithTimeout(0);
-}
-
 void IoEvent::add_ioEventInfo(unsigned int fd, EventInfo& event, int& is_new) {
 	IoEvent::IoEventMapType::iterator it = this->eventMap.find(fd);
 	if (it != this->eventMap.end()) {
@@ -141,4 +125,11 @@ EventInfo* IoEvent::get_timerEventInfo(void* timerAddr)
 		return NULL;
 	}
 	return &it->second;
+}
+
+void IoEvent::check_quit(void* args) {
+	IoEvent* io = (IoEvent*)args;
+	if (io->is_stop() == false)
+		return;
+	io->stop_loop();
 }

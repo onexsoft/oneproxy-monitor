@@ -40,12 +40,14 @@ TcpServer::TcpServer():
 	ioEvent(IoEvent::get_instance("tcpServer_ioevent"))
 {
 	this->listenBackLog = 128;
+	this->isStopServer = false;
 }
 
 TcpServer::TcpServer(std::string serverAddr, unsigned int serverPort):
 	 ioEvent(IoEvent::get_instance("tcpServer_ioevent"))
 {
 	this->listenBackLog = 128;
+	this->isStopServer = false;
 	this->servSct.push_back(NetworkSocket(serverAddr, serverPort));
 }
 
@@ -73,11 +75,6 @@ int TcpServer::create_tcpServer() {
 		}
 	}
 	return 0;
-}
-
-void TcpServer::run_server(int timeout) {
-	if (this->ioEvent != NULL)
-		this->ioEvent->run_loopWithTimeout(timeout);
 }
 
 void TcpServer::set_tcpServer(std::string serverAddr, std::set<unsigned int>& portList)

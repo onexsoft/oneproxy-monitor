@@ -148,13 +148,11 @@ public:
 	EventInfo* get_timerEventInfo(void* timerAddr);
 	virtual int add_timerEvent(double after, double repeat, TimerFunc func, void* args){ return 0;};
 
-	//run,ms
-	virtual void run_loopWithTimeout(int epollTimeout) = 0;
-	virtual void run_loop();
-	void run_loop(int epollTimeout);
-	virtual void run_once();
+	virtual void run_loop() = 0;
 	virtual void stop_loop(){};
 
+	static void check_quit(void* args);
+	virtual void regester_checkQuit(){};
 private:
 	std::string eventName;
 	bool stopEpoll;

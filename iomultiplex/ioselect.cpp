@@ -130,6 +130,12 @@ void IoSelect::del_ioEvent(unsigned int fd)
 	mutexLock.unlock();
 }
 
+void IoSelect::run_loop() {
+	while(this->is_stop() == false) {
+		this->run_loopWithTimeout(-1);
+	}
+}
+
 //run,ms
 void IoSelect::run_loopWithTimeout(int timeout)
 {

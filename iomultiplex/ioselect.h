@@ -48,8 +48,10 @@ public:
 	virtual bool is_readEvent(unsigned int event);
 	virtual bool is_writeEvent(unsigned int event);
 	virtual void del_ioEvent(unsigned int fd);//remove fd event
+	virtual void run_loop();
+private:
 	//run,ms
-	virtual void run_loopWithTimeout(int timeout);
+	void run_loopWithTimeout(int timeout);
 private:
 	MutexLock mutexLock;
 	fd_set fdset;

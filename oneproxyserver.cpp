@@ -32,22 +32,6 @@
 #include "connectmanager.h"
 //#include "google/profiler.h"
 
-int OneproxyServer::start_server()
-{
-	//1. 启动tcp server
-	if(this->create_tcpServer()) {
-		logs(Logger::ERR, "create tcp server error");
-		return -1;
-	}
-
-	//2. run
-	while(this->stop == false) {
-		this->run_server(500);
-	}
-
-	return 0;
-}
-
 thread_start_func(OneproxyServer::start)
 {
 	OneproxyServer *os = (OneproxyServer*)args;
@@ -57,9 +41,10 @@ thread_start_func(OneproxyServer::start)
 		return 0;
 	}
 	os->start_success();
-	while(os->get_stop() == false) {
-		os->run_server(500);
-	}
+
+	os->get_ioEvent().regester_checkQuit();
+	os->get_ioEvent().run_loop();
+
 	return 0;
 }
 

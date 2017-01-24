@@ -65,7 +65,6 @@ public:
 		this->connectManager = connManager;
 	}
 
-	int start_server();
 	void start_success(){this->startSuccess = true;}
 	bool get_startSuccess(){return this->startSuccess;}
 	static thread_start_func(start);
