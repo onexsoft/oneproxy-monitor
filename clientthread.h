@@ -39,6 +39,11 @@
 #include "mutexlock.h"
 #include "uspinlock.h"
 
+typedef struct _try_failed_connection_t{
+	void* connection;
+	void* clientThread;
+}TryFailedConnection;
+
 typedef struct _client_task_stat_t{
 	unsigned int _wait_connection;
 	unsigned int _doing_connection;
@@ -112,30 +117,24 @@ private:
 	int send_data(Connection& conn, bool sendToClient = true);
 	//当isFront为true时，表示向前端套接字写数据，否则表示向后端套接字写数据
 	int write_data(Connection& con, bool isFront);
-//	Connection* get_connection(unsigned int fd);
-//	void add_connectFdRelation(unsigned int fd, Connection* con);
-//	void remove_connectFdRelation(unsigned int fd);
-//	void handle_taskQueue();
 	void add_FailConnQueue(Connection* conn);
-	void handle_FailConnQueue();
-	bool have_queueData();
-	void handle_queueData();
 
 	static thread_start_func(start);
 	static void rw_frontData(unsigned int fd, unsigned int events, void* args);
 	static void rw_backendData(unsigned int fd, unsigned int events, void* args);
 	static void read_clientSocket(unsigned int fd, unsigned int events, void* args);
+	static void check_connectionTimeout(void* args);
+	static void retry_failedConnection(void* args);
+	static void check_quit(void* args);
+
 private:
-//	declare_type_alias(ConnectionTypeMap, std::map<unsigned int, Connection*>)
 	declare_type_alias(ConnectionList, std::list<Connection*>)
 	IoEvent *ioEvent;
 	ConnectManager *connManager;
-//	ConnectionTypeMap connectTypeMap;
 	ConnectionList connectList;
 	MutexLock clientLock;
 	bool stop;
 
-//	std::queue<NetworkSocket*> taskQueue;
 	std::queue<Connection*> FailConnQueue;
 	ClientTaskStat taskStat;
 	int spfd[2];

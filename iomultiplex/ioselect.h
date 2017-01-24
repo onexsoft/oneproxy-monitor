@@ -47,10 +47,7 @@ public:
 	virtual int add_ioEventAccept(unsigned int fd, Func func, void *args);
 	virtual bool is_readEvent(unsigned int event);
 	virtual bool is_writeEvent(unsigned int event);
-
-	//remove fd event
-	virtual void del_ioEvent(unsigned int fd);
-
+	virtual void del_ioEvent(unsigned int fd);//remove fd event
 	//run,ms
 	virtual void run_loopWithTimeout(int timeout);
 private:

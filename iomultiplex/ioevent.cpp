@@ -31,11 +31,13 @@
 #include "logger.h"
 #include "epoll.h"
 #include "ioselect.h"
+#include "ioev.h"
 
 IoEvent* IoEvent::get_instance(std::string name)
 {
 #ifdef linux
-	return (IoEvent*)new Epoll(name);
+	return (IoEvent*)new IOEv(name);
+	//return (IoEvent*)new Epoll(name);
 #else
 	return (IoEvent*)new IoSelect(name);
 #endif
@@ -72,7 +74,11 @@ void IoEvent::add_ioEventInfo(unsigned int fd, EventInfo& event, int& is_new) {
 	this->eventMap[fd] = event;
 }
 
-const EventInfo* IoEvent::get_IoEventInfo(unsigned int fd) {
+void IoEvent::add_ioEventInfo(unsigned int fd, EventInfo& event) {
+	this->eventMap[fd] = event;
+}
+
+EventInfo* IoEvent::get_IoEventInfo(unsigned int fd) {
 	IoEvent::IoEventMapType::iterator it = this->eventMap.find(fd);
 	if (it == this->eventMap.end())
 		return NULL;
@@ -112,4 +118,27 @@ bool IoEvent::is_regesterEvent(unsigned int fd) {
 		return false;
 	}
 	return true;
+}
+
+void IoEvent::add_timerEventInfo(void* timerAddr, EventInfo& event)
+{
+	this->timerMap[timerAddr] = event;
+}
+
+void IoEvent::del_timerEventInfo(void* timerAddr)
+{
+	IoEvent::TimerEventMapType::iterator it = this->timerMap.find(timerAddr);
+	if (it == this->timerMap.end()) {
+		return;
+	}
+	this->timerMap.erase(it);
+}
+
+EventInfo* IoEvent::get_timerEventInfo(void* timerAddr)
+{
+	IoEvent::TimerEventMapType::iterator it = this->timerMap.find(timerAddr);
+	if (it == this->timerMap.end()) {
+		return NULL;
+	}
+	return &it->second;
 }

@@ -37,7 +37,9 @@
 #include "tool.h"
 #include "strategyfactory.h"
 #include "sys/types.h"
+#ifndef __WIN32
 #include "sys/socket.h"
+#endif
 #include "socketutil.h"
 //#include "google/profiler.h"
 
@@ -81,7 +83,6 @@ bool ClientThread::get_stop()
 unsigned int ClientThread::get_ConnectionNum()
 {
 	return this->connectList.size();
-//	return this->connectTypeMap.size();
 }
 
 int ClientThread::add_task(NetworkSocket* ns)
@@ -95,13 +96,10 @@ int ClientThread::add_task(NetworkSocket* ns)
 	conn->clins() = ns;
 	conn->sessData.clientInfo = record()->record_getClientQueryInfo(ns->get_addressHashCode());
 	conn->clientThreadObj = (void*)this;
-	//this->add_connectFdRelation(ns->get_fd(), conn);
 
 	logs(Logger::DEBUG, "add client fd(%d) to ioevent", ns->get_fd());
-//	logs(Logger::ERR, "conn: %p", conn);
 	if (this->ioEvent->add_ioEventRead(ns->get_fd(), ClientThread::rw_frontData, conn)) {
 		logs(Logger::ERR, "add ioEventRead error, fd: %d", ns->get_fd());
-		//this->remove_connectFdRelation(ns->get_fd());
 		record()->record_closeClientConn();
 		record()->record_threadFailConn(this->get_threadId());
 		taskStat.close_connection();
@@ -123,12 +121,6 @@ void ClientThread::handle_readFrontData(Connection& conn)
 		return;
 	logs(Logger::DEBUG, "handle_readFrontData(%d)", conn.sock.curclins->get_fd());
 
-	//1. get connection struct from map
-//	Connection* con = this->get_connection(fd);
-//	if (con == NULL) {
-//		logs(Logger::ERR, "fd(%d) do not in connectionTypeMap error", fd);
-//		return;
-//	}
 	conn.activeTime = config()->get_globalSecondTime();
 
 	//2.read data from front socket
@@ -284,8 +276,6 @@ void ClientThread::get_serverFailed(Connection *con)
 			con->protocolBase = NULL;
 		}
 		add_FailConnQueue(con);
-		taskStat.doing_failConnection();
-		record()->record_threadFailConn(this->get_threadId());
 	}
 }
 
@@ -384,13 +374,7 @@ void ClientThread::handle_readBackendData(Connection& conn)
 		return;
 	unsigned int fd = conn.sock.curservs->get_fd();
 	logs(Logger::INFO, "handle_readBackendData(%d)", fd);
-//
-//	//1. get connection from map
-//	Connection* con = NULL;
-//	if ((con = this->get_connection(fd)) == NULL) {
-//		logs(Logger::INFO, "no fd(%d) in connectTypeMap", fd);
-//		return;
-//	}
+
 	conn.activeTime = config()->get_globalSecondTime();
 	logs(Logger::DEBUG, "fd: %d, activeTime: %llu", fd, conn.activeTime);
 
@@ -602,77 +586,33 @@ int ClientThread::write_data(Connection& con, bool isFront)
 	return 0;
 }
 
-//Connection* ClientThread::get_connection(unsigned int fd)
-//{
-//	Connection* conn = NULL;
-//	ClientThread::ConnectionTypeMap::iterator it = this->connectTypeMap.find(fd);
-//	if (it != this->connectTypeMap.end()) {
-//		conn = it->second;
-//	} else {
-//		logs(Logger::INFO, "no fd(%d) in connectTypeMap(%d)", fd, this->connectTypeMap.size());
-//	}
-//	return conn;
-//}
-
-//void ClientThread::add_connectFdRelation(unsigned int fd, Connection* con) {
-//	this->connectTypeMap[fd] = con;
-//}
-
-//void ClientThread::remove_connectFdRelation(unsigned int fd)
-//{
-//	this->connectTypeMap.erase(fd);
-//	logs(Logger::DEBUG, "remove fd(%d) to connectTypeMap(size:%d)", fd, this->connectTypeMap.size());
-//}
-
 void ClientThread::add_FailConnQueue(Connection* conn)
 {
-	lif(conn && conn->sock.curclins)
-		logs(Logger::WARNING, "client socket: %d", conn->sock.curclins->get_fd());
-	this->FailConnQueue.push(conn);
-}
+	TryFailedConnection* tfc = new TryFailedConnection();
+	tfc->clientThread = this;
+	tfc->connection = conn;
 
-void ClientThread::handle_FailConnQueue()
-{
-	if (FailConnQueue.size() > 0) {
-		Connection* conn = FailConnQueue.front();
-		FailConnQueue.pop();
-		if (conn && conn->sock.curclins) {
-			this->handle_readFrontData(*conn);
-			taskStat.retry_failConnection();
-		}
-	}
-}
+	this->ioEvent->add_timerEvent(10.0, 0.0, ClientThread::retry_failedConnection, tfc);
 
-bool ClientThread::have_queueData()
-{
-	if (this->FailConnQueue.size())
-		return true;
-	return false;
-}
-
-void ClientThread::handle_queueData()
-{
-	if (this->FailConnQueue.size())
-		this->handle_FailConnQueue();
+	taskStat.doing_failConnection();
+	record()->record_threadFailConn(this->get_threadId());
 }
 
 void ClientThread::check_connectionTimeout() {
 
 	Connection* conn = NULL;
-	u_uint64 tmpat = 0;
 	u_uint64 gst = config()->get_globalSecondTime();
 	ConnectionList::iterator it = this->connectList.begin();
-
 	for (; it != this->connectList.end(); ++it) {
-		if ((gst - (*it)->activeTime) > (u_uint64)(config()->get_connectTimeOut())) {//one day
+		if ((gst > (*it)->activeTime)
+				&& (gst - (*it)->activeTime) > (u_uint64)(config()->get_connectTimeOut())) {//one day
 			conn = *it;
-			tmpat = (*it)->activeTime;
 			break;//one time, close one connection.
 		}
 	}
 	if (conn != NULL) {
-		logs(Logger::WARNING, "timeout close client fd: %d, globalSecondTime: %lld, tmpat: %lld",
-				conn->sock.curclins->get_fd(), gst, tmpat);
+		logs(Logger::WARNING, "timeout close client fd: %d, globalSecondTime: %lld",
+				conn->sock.curclins->get_fd(), gst);
 		this->finished_connection(conn, CONN_FINISHED_ERR);
 	}
 }
@@ -705,7 +645,6 @@ void ClientThread::rw_frontData(unsigned int fd, unsigned int events, void* args
 {
 	Connection* conn = (Connection*)args;
 	ClientThread* ct = (ClientThread*)conn->clientThreadObj;
-//	logs(Logger::ERR, "conn: %p", conn);
 	assert(conn != NULL);
 	assert(ct != NULL);
 
@@ -714,11 +653,6 @@ void ClientThread::rw_frontData(unsigned int fd, unsigned int events, void* args
 	if (ct->ioEvent->is_readEvent(events)) {
 		ct->handle_readFrontData(*conn);
 	} else if (ct->ioEvent->is_writeEvent(events)) {
-//		Connection* con = NULL;
-//		if ((con = ct->get_connection(fd)) == NULL) {
-//			logs(Logger::ERR, "no fd(%d) in connectTypeMap", fd);
-//			return;
-//		}
 		ct->write_data(*conn, true);
 	} else {
 		logs(Logger::ERR, "unknow events(%d)", events);
@@ -739,11 +673,6 @@ void ClientThread::rw_backendData(unsigned int fd, unsigned int events, void *ar
 		ct->handle_readBackendData(*conn);
 	} else if (ct->ioEvent->is_writeEvent(events)) {
 		logs(Logger::DEBUG, "is_writeEvent");
-//		Connection* con = NULL;
-//		if ((con = ct->get_connection(fd)) == NULL) {
-//			logs(Logger::ERR, "no fd(%d) in connectTypeMap", fd);
-//			return;
-//		}
 		ct->write_data(*conn, false);
 	} else {
 		logs(Logger::ERR, "unknow events(%d)", events);
@@ -779,6 +708,33 @@ void ClientThread::read_clientSocket(unsigned int fd, unsigned int events, void*
 	}
 }
 
+void ClientThread::check_connectionTimeout(void* args)
+{
+	ClientThread* ct = (ClientThread*)args;
+	ct->check_connectionTimeout();
+}
+
+void ClientThread::retry_failedConnection(void* args)
+{
+	TryFailedConnection* tfc = (TryFailedConnection*)args;
+	if(!tfc || !tfc->clientThread || !tfc->connection) {
+		return;
+	}
+	ClientThread* ct = (ClientThread*)tfc->clientThread;
+	Connection* conn = (Connection*)tfc->connection;
+	ct->taskStat.retry_failConnection();
+	ct->handle_readFrontData(*conn);
+}
+
+void ClientThread::check_quit(void* args)
+{
+	ClientThread* ct = (ClientThread*)args;
+	if (ct->get_stop() == false || ct->get_threadTaskNum()) {
+		return;
+	}
+	ct->ioEvent->stop_loop();
+}
+
 thread_start_func(ClientThread::start)
 {
 //	ProfilerRegisterThread();
@@ -788,22 +744,11 @@ thread_start_func(ClientThread::start)
 
 	//add socket pair read end to epoll.
 	ct->ioEvent->add_ioEventRead(ct->get_socketPairReadFd(), ClientThread::read_clientSocket, ct);
+	//check connection is timeout or not
+	ct->ioEvent->add_timerEvent(10.0, 10.0, ClientThread::check_connectionTimeout, ct);
+	//check quit or not
+	ct->ioEvent->add_timerEvent(1.0, 1.0, ClientThread::check_quit, ct);//检查是否退出
+	ct->ioEvent->run_loop();
 
-	unsigned int cntTime = 10;//5 second, check connection one times.
-	while(ct->get_stop() == false || ct->get_threadTaskNum() || ct->have_queueData()) {
-		if (ct->have_queueData()) {
-			ct->ioEvent->run_loopWithTimeout(0);
-			ct->handle_queueData();
-		} else {
-			ct->ioEvent->run_loopWithTimeout(100);
-		}
-
-		if (cntTime > 0) {
-			cntTime = cntTime - 1;
-		} else {
-			cntTime = 10;
-			ct->check_connectionTimeout();
-		}
-	}
 	return 0;
 }
