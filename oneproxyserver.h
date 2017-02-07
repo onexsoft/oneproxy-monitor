@@ -55,6 +55,7 @@ public:
 
 	void set_stop() {
 		this->stop = true;
+		this->get_ioEvent().stop_event();
 	}
 
 	ConnectManager *get_connectManager() {

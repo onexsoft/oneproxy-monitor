@@ -29,6 +29,7 @@
 #ifndef IOMULTIPLEX_IOEV_H_
 #define IOMULTIPLEX_IOEV_H_
 #include "ioevent.h"
+#ifdef linux
 #include <ev.h>
 
 typedef struct _ioev_func_args_t{
@@ -62,5 +63,6 @@ private:
 	struct ev_loop *m_loop;
 	int m_timerId;
 };
+#endif
 
 #endif /* IOMULTIPLEX_IOEV_H_ */

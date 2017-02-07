@@ -476,7 +476,7 @@ int SystemApi::system_setFDNum(unsigned int max_files_number) {
 	if (-1 == max_files_number_set) {
 		logs(Logger::ERR, "set max files number error");
 		return -1;
-	} else if (max_files_number_set != max_files_number) {
+	} else if ((unsigned int)max_files_number_set != max_files_number) {
 		logs(Logger::ERR, "set max files number error");
 		return -1;
 	}
@@ -506,4 +506,109 @@ int SystemApi::system_setFDNum(unsigned int max_files_number) {
 
 	return 0;
 #endif
+}
+
+int SystemApi::system_socketpair(int family, int type, int protocol, int fd[2]) {
+#ifdef linux
+	return socketpair(family, type, protocol, fd);
+#else
+	if (protocol || family != AF_INET || family != AF_LOCAL) {
+		logs(Logger::ERR, "protocol or family error");
+		return -1;
+	}
+
+	int linster = socket(AF_INET, type, 0);
+	if (linster <= 0) {
+		logs(Logger::ERR, "create socket error(%s)", SystemApi::system_strerror());
+		return -1;
+	}
+
+	struct sockaddr_in linsten_addr;
+	memset(&linsten_addr, 0, sizeof(linsten_addr));
+	linsten_addr.sin_family = AF_INET;
+	linsten_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	linsten_addr.sin_port = 0;
+
+	if (bind(linster, (struct sockaddr*)&linsten_addr, sizeof(linsten_addr)) < 0) {
+		logs(Logger::ERR, "bind address error(%s)", SystemApi::system_strerror());
+		close(linster);
+		return -1;
+	}
+
+	if (listen(linster, 1) < 0) {
+		logs(Logger::ERR, "listen error(%s)", SystemApi::system_strerror());
+		close(linster);
+		return -1;
+	}
+
+	int connector = socket(AF_INET, type, 0);
+	if (connector <= 0) {
+		logs(Logger::ERR, "create connector socket error(%s)", SystemApi::system_strerror());
+		close(linster);
+		return -1;
+	}
+
+	struct sockaddr_in connect_addr;
+	int size = sizeof(connect_addr);
+	if (getsockname(linster, (struct sockaddr*)&connect_addr, &size)) {
+		logs(Logger::ERR, "get socket name error(%s)", SystemApi::system_strerror());
+		close(linster);
+		close(connector);
+		return -1;
+	}
+	if (size != sizeof(connect_addr)) {
+		logs(Logger::ERR, "size error");
+		close(linster);
+		close(connector);
+		return -1;
+	}
+
+	if (connect(connector, (struct sockaddr*)&connect_addr, sizeof(connect_addr)) < 0) {
+		logs(Logger::ERR, "connect error(%s)", SystemApi::system_strerror());
+		close(linster);
+		close(connector);
+		return -1;
+	}
+
+	size = sizeof(linsten_addr);
+	int acceptor = accept(linster, (struct sockaddr*)&linsten_addr, &size);
+	if (accept <= 0) {
+		logs(Logger::ERR, "accept error(%s)", SystemApi::system_strerror());
+		close(linster);
+		close(connector);
+		return -1;
+	}
+
+	if (size != sizeof(linsten_addr)) {
+		logs(Logger::ERR, "size error");
+		close(linster);
+		close(connector);
+		close(acceptor);
+		return -1;
+	}
+
+	close(linster);
+
+	if (getsockname(connector, (struct sockaddr*)&connect_addr, &size) < 0) {
+		logs(Logger::ERR, "get socket name error(%s)", SystemApi::system_strerror());
+		close(linster);
+		close(connector);
+		close(acceptor);
+		return -1;
+	}
+	if (size != sizeof(connect_addr)
+			|| linsten_addr.sin_family != connect_addr.sin_family
+			|| linsten_addr.sin_addr.s_addr != connect_addr.sin_addr.s_addr
+			|| linsten_addr.sin_port != connect_addr.sin_port) {
+		logs(Logger::ERR, "addr error");
+		close(linster);
+		close(connector);
+		close(acceptor);
+		return -1;
+	}
+
+	fd[0] = connector;
+	fd[1] = acceptor;
+#endif
+	return 0;
 }

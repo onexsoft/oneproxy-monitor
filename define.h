@@ -92,6 +92,10 @@ typedef void (*FreeFunc) (void*);
 #endif
 #endif
 
+#ifdef _WIN32
+#define AF_LOCAL AF_INET
+#endif
+
 typedef std::map<std::string, std::string> KVStringMap;
 
 #endif /* DEFINE_H_ */

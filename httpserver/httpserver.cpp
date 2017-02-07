@@ -63,6 +63,7 @@ void HttpServer::accept_clientRequest(NetworkSocket* clientSocket)
 void HttpServer::stop()
 {
 	this->isStop = true;
+	this->get_ioEvent().stop_event();
 }
 
 thread_start_func(HttpServer::start)

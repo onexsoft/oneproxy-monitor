@@ -29,6 +29,7 @@
 #include "ioev.h"
 #include "logger.h"
 
+#ifdef linux
 IOEv::IOEv(std::string name): IoEvent(name) {
 	// TODO Auto-generated constructor stub
 	this->m_loop = ev_loop_new(0);
@@ -193,3 +194,4 @@ void IOEv::stop_loop() {
 void IOEv::regester_checkQuit() {
 	this->add_timerEvent(1.0, 1.0, IoEvent::check_quit, this);
 }
+#endif

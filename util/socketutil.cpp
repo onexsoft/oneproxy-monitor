@@ -111,10 +111,17 @@ int SocketUtil::socket_readAllData(int fd, StringBuf& sb, int microsecond)
 		int len = read(fd, (char*)(sb.addr() + sb.length()), dataLen);
 		if (len == -1) {
 			errno = SystemApi::system_errno();
+#ifdef linux
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
 				SystemApi::system_sleep(microsecond);
 				continue;
 			}
+#else
+			if (errno == EAGAIN || errno == WSAEWOULDBLOCK) {
+				SystemApi::system_sleep(microsecond);
+				continue;
+			}
+#endif
 			logs(Logger::ERR, "recv data from fd(%d) error(%d:%s)", fd,
 					errno, SystemApi::system_strerror(errno));
 			return -1;

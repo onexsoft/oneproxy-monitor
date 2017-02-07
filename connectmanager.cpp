@@ -224,7 +224,10 @@ void ConnectManager::start()
 		}
 	}
 
-	//6. unlink pid file
+	//stop http server
+	httpServer.stop();
+
+	// unlink pid file
 	if (config()->get_pidFilePath().size()) {
 		PidManager::unlink_pid(config()->get_pidFilePath().c_str());
 	}

@@ -56,8 +56,8 @@ ClientThread::ClientThread(ConnectManager* connManager, std::string threadName)
 	this->connManager = connManager;
 	this->stop = false;
 
-	uif(socketpair(AF_LOCAL, SOCK_STREAM, 0, this->spfd)) {
-		logs(Logger::FATAL, "create socketpair error");
+	uif(SystemApi::system_socketpair(AF_LOCAL, SOCK_STREAM, 0, this->spfd)) {
+		logs(Logger::FATAL, "create socketpair error(%s)", SystemApi::system_strerror());
 	}
 
 	this->startThread(ClientThread::start, this);
@@ -136,7 +136,6 @@ void ClientThread::handle_readFrontData(Connection& conn)
 		 * 客户端强制关闭，服务端的状态可能不正确，是否复用由底层协议决定
 		 * 如果是获取后端失败，重试的情况下，前端socket没有数据，但是socket已经在上次读取到数据了
 		 * 需要从新进行处理。
-		 * bug: 由于进行读写分离的情况下，把recvData中的数据进行了清理，可能导致bug。需要检查确定。
 		 * **/
 		this->finished_connection(&conn, CONN_FINISHED_FRONT_CLOSE);
 		return;
@@ -546,7 +545,7 @@ int ClientThread::write_data(Connection& con, bool isFront)
 		"data.length: %d, sendBuf.length: %d", desSocket.get_fd(),\
 			data.get_offset(), data.length(), desSocket.get_sendData().get_length());\
 	desSocket.save_data(data);\
-	this->ioEvent->add_ioEventWrite(desSocket.get_fd(), func, this);\
+	this->ioEvent->add_ioEventWrite(desSocket.get_fd(), func, &con);\
 	if (sSocket != NULL) this->ioEvent->del_ioEvent(sSocket->get_fd());\
 }while(0)
 
@@ -688,6 +687,7 @@ void ClientThread::read_clientSocket(unsigned int fd, unsigned int events, void*
 		NetworkSocket* ns;
 		long l;
 	} d;
+	d.l = 0;
 
 	if (SocketUtil::socket_readAllData(ct->get_socketPairReadFd(), sb, 500) < 0) {
 		logs(Logger::ERR, "read client connection error");

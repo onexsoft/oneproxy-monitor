@@ -105,6 +105,7 @@ public:
 	static void system_setThreadName(std::string name);
 	//设置文件描述符限制
 	static int system_setFDNum(unsigned int max_files_number);
+	static int system_socketpair(int family, int type, int protocol, int fd[2]);
 };
 
 #endif /* UTIL_SYSTEMAPI_H_ */
