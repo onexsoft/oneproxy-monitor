@@ -16,37 +16,38 @@
  * specific language governing permissions and limitations
  * under the License.
  * 
- * @FileName: assistthread.h
+ * @FileName: managerbase.h
  * @Description: TODO
  * All rights Reserved, Designed By huih
  * @Company: onexsoft
  * @Author: hui
  * @Version: V1.0
- * @Date: 2016年11月9日 下午1:38:52
+ * @Date: 2017年2月23日 下午2:50:22
  *  
  */
 
-#ifndef ASSISTTHREAD_H_
-#define ASSISTTHREAD_H_
+#ifndef MANAGERBASE_H_
+#define MANAGERBASE_H_
 
-#include "thread.h"
-#include "connectionpool.h"
+#include "vip.h"
+#include "httpserver.h"
+#include "assistthread.h"
+#include "define.h"
 
-class AssistThread : public Thread{
-private:
-	bool is_stop;
+typedef void (*SignalHandleFunc)(int);
+class ManagerBase {
 public:
-	AssistThread();
-	~AssistThread();
-
-	void stop();
-	bool get_stop();
-
-	bool connect_dataBaseIsOk(std::string addr, unsigned int port);
-	void check_dataBaseActive();
+	ManagerBase();
+	virtual ~ManagerBase();
+	void start();
+protected:
+	virtual void start_child() = 0;
+	void set_signalHandleFunc(SignalHandleFunc func);
 private:
-	static thread_start_func(start);
-
+	Vip vipThread;
+	HttpServer httpServer;
+	AssistThread assistThread;
+	SignalHandleFunc func;
 };
 
-#endif /* ASSISTTHREAD_H_ */
+#endif /* MANAGERBASE_H_ */

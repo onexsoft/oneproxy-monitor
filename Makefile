@@ -3,18 +3,19 @@ BUILD_TEST_BIN = utest
 
 ifeq ($(LANG),) #windows
 	INSTALLDIR = install
-	LDFLAGS = -static-libgcc -static-libstdc++
-	LIBS = ./lib/win/libssl.a ./lib/win/libcrypto.a ./lib/win/libgdi32.a -lwsock32 -lwinmm
-	INCLUDE = -IC:\openssl-1.0.2e\win64\include
+	LDFLAGS = -static-libgcc -static-libstdc++ -L./lib -L./
+	LIBS = ./lib/win/libssl.a ./lib/win/libcrypto.a ./lib/win/libgdi32.a -lwsock32 -lwinmm -lpacket -lwpcap -lws2_32 -lIPHLPAPI ./lib/win/libgmp.a
+	INCLUDE = -IC:\openssl-1.0.2e\win64\include -ID:\winlib\winpcap\Include
 else #linux
 $(shell if [ ! -d $(BUILD)/$(BUILD_TEST_BIN) ]; then mkdir -p $(BUILD)/$(BUILD_TEST_BIN); fi;)
 	INSTALLDIR = /usr/local/superoneproxy/
 	LDFLAGS = 
 	OPENSSL = /usr/local/openssl
 	LIBEV = /usr/local/libev
+	LIBPCAP = /usr/local/libpcap
 	# -lprofiler -lunwind ./libtcmalloc_minimal.a
-	LIBS = -pthread ./libtcmalloc_minimal.a ./stats/libsqlite3.a ./libgmp.a $(OPENSSL)/lib/libssl.a $(OPENSSL)/lib/libcrypto.a $(LIBEV)/lib/libev.a -ldl
-	INCLUDE = -I$(OPENSSL)/include -I$(LIBEV)/include
+	LIBS = -pthread ./stats/libsqlite3.a ./lib/libgmp.a $(OPENSSL)/lib/libssl.a $(OPENSSL)/lib/libcrypto.a $(LIBEV)/lib/libev.a $(LIBPCAP)/lib/libpcap.a -ldl
+	INCLUDE = -I$(OPENSSL)/include -I$(LIBEV)/include -I$(LIBPCAP)/include
 endif
 
 CXXFLAGS = -Wall -Wformat=0 -Wno-strict-aliasing -g
@@ -23,6 +24,7 @@ APPSOURCEDIR = ./sql \
 			   ./util \
 				./conf \
 				./stats \
+				./monitor \
 				./httpserver \
 				./iomultiplex \
 				./protocol \

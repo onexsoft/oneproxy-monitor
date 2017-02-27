@@ -42,10 +42,7 @@ bool ConnectManager::stop = false;
 AcceptThreadManager ConnectManager::acceptThreadManager;
 MutexLock ConnectManager::mutexLock;
 
-ConnectManager::ConnectManager(int threadNum):
-	vipThread(config()->get_vipIfName(), config()->get_vipAddress(), std::string("vipthread")),
-	httpServer(config()->get_httpServerAddr(), config()->get_httpServerPort(), std::string("httpserver")),
-	assistThread(this)
+ConnectManager::ConnectManager(int threadNum)
 {
 	int i = 0;
 	this->stop = false;
@@ -57,12 +54,12 @@ ConnectManager::ConnectManager(int threadNum):
 	acceptThreadManager.start(config()->get_acceptThreadNum(), this,
 			config()->get_oneproxyAddr(), config()->get_oneproxyPortSet(),
 			config()->get_listenBackLog());
+
+	this->set_signalHandleFunc(&ConnectManager::handle_signal);
 }
 
 ConnectManager::~ConnectManager()
 {
-	assistThread.stop();
-	httpServer.stop();
 	ThreadMapType::iterator it = this->threadMap.begin();
 	for (; it != this->threadMap.end(); ++it) {
 		ClientThread* ct = (ClientThread*)((*it).second);
@@ -184,34 +181,8 @@ void ConnectManager::alloc_task()
 	}
 }
 
-void ConnectManager::start()
+void ConnectManager::start_child()
 {
-	SystemApi::system_setThreadName("mainThread");
-	//信号处理函数
-	signal(SIGTERM, ConnectManager::handle_signal);
-	signal(SIGINT, ConnectManager::handle_signal);
-	signal(SIGUSR1, ConnectManager::handle_signal);
-	signal(SIGUSR2, ConnectManager::handle_signal);
-#ifndef _WIN32
-	signal(SIGPIPE, SIG_IGN);
-#endif
-	signal(SIGFPE, SIG_IGN);
-
-	//close old process.
-	if (config()->get_pidFilePath().size() > 0) {
-		if (PidManager::handle_reboot(config()->get_pidFilePath().c_str())) {
-			logs(Logger::ERR, "reboot error");
-			return;
-		}
-	}
-
-	if (config()->get_pidFilePath().size()) {
-		if(PidManager::save_pid(config()->get_pidFilePath().c_str())) {
-			logs(Logger::ERR, "write pid error");
-			return;
-		}
-	}
-
 	logs(Logger::ERR, "start to connect  manager...");
 	while(!ConnectManager::stop || (this->get_taskSize() > 0)) {
 		if (this->get_taskSize() > 0
@@ -222,14 +193,6 @@ void ConnectManager::start()
 			mutexLock.wait_mutexCond();
 			mutexLock.unlock();
 		}
-	}
-
-	//stop http server
-	httpServer.stop();
-
-	// unlink pid file
-	if (config()->get_pidFilePath().size()) {
-		PidManager::unlink_pid(config()->get_pidFilePath().c_str());
 	}
 }
 

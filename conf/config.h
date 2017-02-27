@@ -35,6 +35,7 @@
 #include <list>
 #include <set>
 #include <strings.h>
+#include <map>
 
 #include "logger.h"
 #include "mutexlock.h"
@@ -224,7 +225,7 @@ public:
 
 #define config() Config::get_config()
 #define decl
-class Config: public ConfigBase{
+class Config: public ConfigBase {
 	declare_class_member(unsigned int, maxConnectNum)//oneproxy 同时最大处理量
 	declare_class_member(Logger::loggerLevel, loggerLevel)
 	declare_class_member(int, tryConnServerTimes)//尝试连接服务器的次数，如果达到这个次数还没有成功，则关闭客户端的连接
@@ -250,6 +251,9 @@ class Config: public ConfigBase{
 	declare_class_member(int, connectTimeOut)//when connect timeout, oneproxy will close it.
 	declare_class_member(int, acceptThreadNum)
 	declare_class_member(int, listenBackLog)
+	declare_class_member(bool, useMonitor)
+	declare_class_member(std::string, monitorPortClass)//for example: SSProtocol:1344,133;PGProtocol:5432,5433
+
 
 	//global time, update by one second or poll callback.
 	volatile u_uint64 m_globalMillisecondTime;
@@ -268,6 +272,7 @@ private:
 	void default_config();
 	void print_config();
 	void handle_ports();
+	void handle_monitorPortClass();
 	int handle_config();
 	int handle_dataBaseGroup();
 
@@ -286,6 +291,7 @@ public:
 	unsigned int get_dataBaseGroupSize();
 	u_uint64 get_globalSecondTime();
 	u_uint64 get_globalMillisecondTime();
+	std::map<int, std::string>& get_monitorPortClassMap();
 
 private:
 	std::vector<DataBase> dbVector;
@@ -294,6 +300,8 @@ private:
 	std::vector<ConfigKeyValue> oneproxyCfg;
 	std::list<std::vector<ConfigKeyValue> > dbInfoCfg;//支持配置多个db信息
 	std::list<std::vector<ConfigKeyValue> > dbGroupCfg;//多个组信息
+
+	std::map<int, std::string> monitorPortClass;//use in monitor. key: port, value: class name
 };
 
 #endif /* CONFIG_H_ */

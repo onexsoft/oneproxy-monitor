@@ -60,6 +60,7 @@ typedef enum {
 	thread_type_httpserver,
 	thread_type_vip,
 	thread_type_accept,
+	thread_type_work,
 } ThreadType;
 
 class Thread{

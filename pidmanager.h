@@ -33,6 +33,7 @@
 #include "tool.h"
 #include "systemapi.h"
 #include "config.h"
+#include <signal.h>
 
 class PidManager{
 public:

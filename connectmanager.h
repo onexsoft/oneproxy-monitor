@@ -48,9 +48,9 @@
 #else
 #include <pthread.h>
 #endif
-#include <signal.h>
+#include "managerbase.h"
 
-class ConnectManager
+class ConnectManager: public ManagerBase
 {
 public:
 	ConnectManager(int threadNum = 5);
@@ -59,7 +59,8 @@ public:
 	MutexLock* get_mutexLock();
 	ClientThread* get_minTaskThread();
 	int get_taskSize();
-	void start();
+protected:
+	virtual void start_child();
 
 private:
 	unsigned int get_allThreadTaskSize();
@@ -72,13 +73,9 @@ private:
 
 	int threadNum;
 	static bool stop;
-	Vip vipThread;
 	ThreadMapType threadMap; //key: threadId
 	TaskQueue taskQueue; //need to handle sock
 	static MutexLock mutexLock;
-	HttpServer httpServer;
-	AssistThread assistThread;
 	static AcceptThreadManager acceptThreadManager;
-
 };
 #endif /* CONNECTMANAGER_H_ */

@@ -612,3 +612,36 @@ int SystemApi::system_socketpair(int family, int type, int protocol, int fd[2]) 
 #endif
 	return 0;
 }
+
+std::string SystemApi::system_getIp(std::string device) {
+#ifdef linux
+	int sock_fd;
+	struct  sockaddr_in my_addr;
+	struct ifreq ifr;
+
+	/**//* Get socket file descriptor */
+	if ((sock_fd = socket(PF_INET, SOCK_DGRAM, 0)) == -1)
+	{
+	  logs(Logger::ERR, "create socket error(%s)", SystemApi::system_strerror());
+	  return std::string();
+	}
+
+	/* Get IP Address */
+	strncpy(ifr.ifr_name, device.c_str(), IF_NAMESIZE);
+	ifr.ifr_name[IFNAMSIZ-1] = '\0';
+
+	if (ioctl(sock_fd, SIOCGIFADDR, &ifr) < 0)
+	{
+		logs(Logger::ERR, "ioctl error(%s)", SystemApi::system_strerror());
+		return std::string();
+	}
+
+	char ipaddr[32] = {0};
+	memcpy(&my_addr, &ifr.ifr_addr, sizeof(my_addr));
+	strcpy(ipaddr, inet_ntoa(my_addr.sin_addr));
+	close(sock_fd);
+	return std::string(ipaddr);
+#else
+	return std::string();
+#endif
+}

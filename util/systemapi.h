@@ -47,6 +47,7 @@
 #include <sys/types.h>
 #include <netdb.h>
 #include <sys/time.h>
+#include <net/if.h>
 #endif
 
 #include <unistd.h>
@@ -106,6 +107,7 @@ public:
 	//设置文件描述符限制
 	static int system_setFDNum(unsigned int max_files_number);
 	static int system_socketpair(int family, int type, int protocol, int fd[2]);
+	static std::string system_getIp(std::string device);
 };
 
 #endif /* UTIL_SYSTEMAPI_H_ */

@@ -38,7 +38,7 @@
 #define ICMP_MIN 8 // ICMP报文的最小长度是8字节(仅为首部，不包含icmp_data）
 
 /* The IP header */
-typedef struct ip
+typedef struct _ip_t
 {
     unsigned char ip_hl:4;   //  4位首部长度 （length of the header）
     unsigned char ip_v:4;   // IP版本号

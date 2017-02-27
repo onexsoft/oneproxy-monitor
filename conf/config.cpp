@@ -156,6 +156,8 @@ Config::Config()
 	add_oneproxyConfig("connecttimeout", "86400", &Config::cvtInt, &Config::set_connectTimeOut);//one day,unit: second.
 	add_oneproxyConfig("acceptthreadnum", "1", &Config::cvtInt, &Config::set_acceptThreadNum);
 	add_oneproxyConfig("listenbacklog", "1000", &Config::cvtInt, &Config::set_listenBackLog);
+	add_oneproxyConfig("usemonitor", "true", &Config::cvtBool, &Config::set_useMonitor);
+	add_oneproxyConfig("monitorportclass", "SSProtocol:1433;PGProtocol:5432;FakeProtocol:-1", &Config::cvtString, &Config::set_monitorPortClass);
 #undef add_oneproxyConfig
 
 #define add_dbConfig(db, key, defaultv, cvtf, setf) add_config(db, key, defaultv, (CVTFunc)cvtf, (SetFunc)setf)
@@ -177,11 +179,11 @@ Config::Config()
 	add_dbConfig(dbg, "dbslavegroup", "", &DataBase::cvtString, &DataBaseGroup::set_dbSlaveGroup);
 	add_dbConfig(dbg, "classname", "FakeProtocol", &DataBaseGroup::cvtString, &DataBaseGroup::set_className);
 	add_dbConfig(dbg, "frontport", "0", &DataBaseGroup::cvtInt, &DataBaseGroup::set_frontPort);
-	add_dbConfig(dbg, "passwordseparate", "true", &DataBaseGroup::cvtBool, &DataBaseGroup::set_passwordSeparate);
-	add_dbConfig(dbg, "readslave", "true", &DataBaseGroup::cvtBool, &DataBaseGroup::set_readSlave);
-	add_dbConfig(dbg, "useconnectionpool", "true", &DataBaseGroup::cvtBool, &DataBaseGroup::set_useConnectionPool);
+	add_dbConfig(dbg, "passwordseparate", "false", &DataBaseGroup::cvtBool, &DataBaseGroup::set_passwordSeparate);
+	add_dbConfig(dbg, "readslave", "false", &DataBaseGroup::cvtBool, &DataBaseGroup::set_readSlave);
+	add_dbConfig(dbg, "useconnectionpool", "false", &DataBaseGroup::cvtBool, &DataBaseGroup::set_useConnectionPool);
 	add_dbConfig(dbg, "clientauthmethod", "md5", &DataBaseGroup::cvtString, &DataBaseGroup::set_clientAuthMethod);
-	add_dbConfig(dbg, "clearbackendconnection", "true", &DataBaseGroup::cvtBool, &DataBaseGroup::set_clearBackendConnection);
+	add_dbConfig(dbg, "clearbackendconnection", "false", &DataBaseGroup::cvtBool, &DataBaseGroup::set_clearBackendConnection);
 	add_dbConfig(dbg, "usedatabaseconnecttobalace", "false", &DataBaseGroup::cvtBool, &DataBaseGroup::set_useDatabaseConnectToBalace);
 	add_dbConfig(dbg, "usemasterassalve", "false", &DataBaseGroup::cvtBool, &DataBaseGroup::set_useMasterAsSalve);
 	this->dbGroupCfg.push_back(dbg);
@@ -274,6 +276,8 @@ void Config::print_config()
 	logs(Logger::INFO, "poolConnTimeoutReleaseTime: %d", this->m_poolConnTimeoutReleaseTime);
 	logs(Logger::INFO, "acceptThreadNum: %d", this->m_acceptThreadNum);
 	logs(Logger::INFO, "listenbacklog: %d", this->m_listenBackLog);
+	logs(Logger::INFO, "useMonitor: %d", this->m_useMonitor);
+	logs(Logger::INFO, "monitorPortClass:%s", this->m_monitorPortClass.c_str());
 
 	std::vector<DataBase>::iterator it = dbVector.begin();
 	for (; it != dbVector.end(); ++it) {
@@ -319,6 +323,50 @@ void Config::handle_ports()
 
 		pos = curPos + 1;
 	} while(1);
+}
+
+void Config::handle_monitorPortClass()
+{
+	//for example:SSProtocol:1433;PGProtocol:5432,5433;FakeProtocol:-1
+
+	if (this->m_monitorPortClass.length() <= 0)
+		return;
+
+	size_t pos = 0;
+	do{
+		size_t curPos = this->m_monitorPortClass.find_first_of(';', pos);
+		if (curPos == this->m_monitorPortClass.npos) {
+			curPos = this->m_monitorPortClass.length();
+		}
+
+		size_t nPos = this->m_monitorPortClass.find_first_of(':', pos);
+		if (nPos >= curPos) {
+			//error
+			logs(Logger::ERR,
+					"monitorPortClass(%s) format error, normal format exmaple: className:port1,port2;className:port;...",
+					this->m_monitorPortClass.c_str());
+			return;
+		}
+		std::string className = this->m_monitorPortClass.substr(pos, nPos - pos);
+		if (className.length() <= 0) {
+			logs(Logger::ERR, "class name is empty error, monitorPortClass(%s)", this->m_monitorPortClass.c_str());
+			return;
+		}
+
+		size_t pPos = nPos + 1;
+		while(pPos < curPos) {
+			size_t cur_pPos = this->m_monitorPortClass.find_first_of(',', pPos);
+			unsigned int port = (unsigned int)atoi(this->m_monitorPortClass.substr(pPos, cur_pPos - pPos).c_str());
+			if (port == 0) {
+				logs(Logger::ERR, "className(%s) 'port is 0 error,  monitorPortClass(%s)",
+						className.c_str(), this->m_monitorPortClass.c_str());
+				return;
+			}
+			this->monitorPortClass[port] = className;
+			pPos = cur_pPos + 1;
+		}
+		pos = curPos + 1;
+	}while(pos < this->m_monitorPortClass.length());
 }
 
 int Config::handle_config()
@@ -384,6 +432,10 @@ int Config::handle_config()
 			it->set_useConnectionPool(false);
 		}
 	}
+
+	//use monitor
+	this->handle_monitorPortClass();
+
 	return 0;
 }
 
@@ -813,6 +865,11 @@ u_uint64 Config::get_globalSecondTime()
 u_uint64 Config::get_globalMillisecondTime()
 {
 	return this->m_globalMillisecondTime;
+}
+
+std::map<int, std::string>& Config::get_monitorPortClassMap()
+{
+	return this->monitorPortClass;
 }
 
 IMPLEMENT_CVTSTRING_FUNC(Config, cvtString)

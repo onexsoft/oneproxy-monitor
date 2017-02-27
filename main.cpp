@@ -34,6 +34,8 @@
 #include "connection.h"
 #include "connectmanager.h"
 #include "pidmanager.h"
+#include "monitormanager.h"
+
 //#include "google/profiler.h"
 
 int main(int argc, char* argv[]) {
@@ -46,12 +48,14 @@ int main(int argc, char* argv[]) {
 
 	//set file descriptor number
 	{
+#ifdef linux
 		//client, master, slave.
 		unsigned int max_file_descriptor = config()->get_maxConnectNum() * 3 + 1024;
 		if (SystemApi::system_setFDNum(max_file_descriptor)) {
 			logs(Logger::FATAL, "set fd number error");
 			return -1;
 		}
+#endif
 	}
 
 	//根据需要keepalive
@@ -71,9 +75,14 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 
-	//start to handle client data.
-	ConnectManager connectManager(config()->get_threadNum());
-	connectManager.start();
+	if (config()->get_useMonitor()) {
+		MonitorManager mm;
+		mm.start();
+	} else {
+		//start to handle client data.
+		ConnectManager connectManager(config()->get_threadNum());
+		connectManager.start();
+	}
 
 	//卸载网络环境
 	SystemApi::clear_networkEnv();

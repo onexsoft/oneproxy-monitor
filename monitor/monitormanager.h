@@ -16,37 +16,38 @@
  * specific language governing permissions and limitations
  * under the License.
  * 
- * @FileName: assistthread.h
+ * @FileName: monitormanager.h
  * @Description: TODO
  * All rights Reserved, Designed By huih
  * @Company: onexsoft
  * @Author: hui
  * @Version: V1.0
- * @Date: 2016年11月9日 下午1:38:52
+ * @Date: 2017年2月23日 下午12:57:44
  *  
  */
 
-#ifndef ASSISTTHREAD_H_
-#define ASSISTTHREAD_H_
+#ifndef MONITOR_MONITORMANAGER_H_
+#define MONITOR_MONITORMANAGER_H_
 
-#include "thread.h"
-#include "connectionpool.h"
+#include "conf/config.h"
+#include "capturedata.h"
+#include "supermonitor.h"
+#include "managerbase.h"
+#include "pcap.h"
 
-class AssistThread : public Thread{
-private:
-	bool is_stop;
+class MonitorManager:public ManagerBase {
 public:
-	AssistThread();
-	~AssistThread();
+	MonitorManager();
+	virtual ~MonitorManager();
 
-	void stop();
-	bool get_stop();
-
-	bool connect_dataBaseIsOk(std::string addr, unsigned int port);
-	void check_dataBaseActive();
+protected:
+	virtual void start_child();
+	static void handle_signal(int sig);
+	static void monitorData(u_char *arg, const struct pcap_pkthdr *pkthdr, const u_char *packet);
 private:
-	static thread_start_func(start);
-
+	SuperMonitor sm;
+	CaptureData captureData;
+	static bool m_stop;
 };
 
-#endif /* ASSISTTHREAD_H_ */
+#endif /* MONITOR_MONITORMANAGER_H_ */

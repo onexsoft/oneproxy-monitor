@@ -29,11 +29,10 @@
 #include "assistthread.h"
 #include "connectmanager.h"
 
-AssistThread::AssistThread(ConnectManager* manager)
+AssistThread::AssistThread()
 	:Thread(thread_type_manager, std::string("assistThread"))
 {
 	this->is_stop = false;
-	this->manager = manager;
 	this->startThread(AssistThread::start, this);
 }
 
@@ -99,20 +98,26 @@ thread_start_func(AssistThread::start)
 {
 	AssistThread* self = (AssistThread*)args;
 
-	ConnectionPool::get_pool().set_checkActive();
-	ConnectionPool::get_pool().set_idleTimeoutCheck(config()->get_poolConnCheckActiveTime());
-	ConnectionPool::get_pool().set_idleTimeoutRelease(config()->get_poolConnTimeoutReleaseTime());
+	if(!config()->get_useMonitor()) {
+		ConnectionPool::get_pool().set_checkActive();
+		ConnectionPool::get_pool().set_idleTimeoutCheck(config()->get_poolConnCheckActiveTime());
+		ConnectionPool::get_pool().set_idleTimeoutRelease(config()->get_poolConnTimeoutReleaseTime());
+	}
 
 	while(false == self->get_stop()) {
 
-		//check database is active or not
-		self->check_dataBaseActive();
+		if (!config()->get_useMonitor()) {
+			//check database is active or not
+			self->check_dataBaseActive();
+		}
 
 		//update global time
 		config()->update_globalTime();
 
-		//check the socket is active in pool
-		ConnectionPool::get_pool().check_connectActive();
+		if (!config()->get_useMonitor()) {
+			//check the socket is active in pool
+			ConnectionPool::get_pool().check_connectActive();
+		}
 
 		if (cmpdata(u_uint64, (SystemApi::system_second() - record()->bakRecordStartTime),
 				>=, record()->realRecordTime)) {
