@@ -274,10 +274,21 @@ Connection* ParseData::new_connection(TaskDataT* tdt)
 	unsigned int clientHashCode = Tool::quick_hash_code(conn->sock.curclins->get_address().c_str(),
 			conn->sock.curclins->get_address().length());
 	conn->sock.curclins->set_addressHashCode(clientHashCode);
-	record()->record_clientQueryAddNewClient(conn->sock.curclins->get_addressHashCode(),
-			conn->sock.curclins->get_address());
+	conn->createConnTime = SystemApi::system_millisecond();
+	conn->connection_hashcode = Tool::quick_conn_hash_code(conn->sock.curclins->get_address(), conn->sock.curclins->get_port(),
+				conn->sock.curservs->get_address(),
+				conn->sock.curservs->get_port(), conn->createConnTime);
+
+	record()->record_clientQueryAddNewClient(conn->createConnTime,
+			conn->sock.curclins->get_addressHashCode(),
+			conn->sock.curclins->get_address(), conn->sock.curclins->get_port(),
+			conn->sock.curservs->get_address(), conn->sock.curservs->get_port());
 	record()->record_acceptClientConn();
 	record()->record_startHandingConn();
+
+	unsigned int serverHashCode = Tool::quick_hash_code(conn->sock.curservs->get_address().c_str(),
+			conn->sock.curservs->get_address().length());
+	conn->sock.curservs->set_addressHashCode(serverHashCode);
 
 	return conn;
 }

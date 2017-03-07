@@ -61,6 +61,7 @@ typedef enum {
 	thread_type_vip,
 	thread_type_accept,
 	thread_type_work,
+	thread_type_db,
 } ThreadType;
 
 class Thread{

@@ -71,7 +71,8 @@ int TcpServer::create_tcpServer() {
 	for (; it != this->servSct.end(); ++it) {
 		if (it->get_fd() > 0) {
 			this->ioEvent->add_ioEventAccept(it->get_fd(), TcpServer::accept_connect, this);
-			this->fdPortMap[it->get_fd()] = it->get_port();
+			this->fdPortMap[it->get_fd()].port = it->get_port();
+			this->fdPortMap[it->get_fd()].address = it->get_address();
 		}
 	}
 	return 0;
@@ -187,7 +188,8 @@ NetworkSocket* TcpServer::accept_connect(unsigned int sfd)
 	clientSocket->addr_assign(&client_addr);
 	clientSocket->addr_ntop();
 	clientSocket->set_fd(cfd);
-	clientSocket->get_attachData().set_listenPort(this->fdPortMap[sfd]);
+	clientSocket->get_attachData().set_listenPort(this->fdPortMap[sfd].port);
+	clientSocket->get_attachData().set_listenAddr(this->fdPortMap[sfd].address);
 
 	logs(Logger::INFO, "accept client fd(%d) address (%s) port(%d) listenPort(%d)", cfd,
 			clientSocket->get_address().c_str(), clientSocket->get_port(),

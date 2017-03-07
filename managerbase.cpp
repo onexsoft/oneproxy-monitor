@@ -78,6 +78,9 @@ void ManagerBase::start() {
 
 	this->start_child();
 
+	//stop stats
+	record()->record_stop();
+
 	// unlink pid file
 	if (config()->get_pidFilePath().size()) {
 		PidManager::unlink_pid(config()->get_pidFilePath().c_str());

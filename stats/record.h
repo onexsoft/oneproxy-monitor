@@ -34,7 +34,7 @@
 #include "record_define.h"
 #include "connection.h"
 #include "uspinlock.h"
-
+#include "dbmanager.h"
 
 #define record() stats::Record::get_recordInstance()
 
@@ -78,8 +78,10 @@ public:
 		this->record_print_time_interval = time;
 	}
 
-	void record_clientQueryRecvSize(unsigned int hashCode, unsigned int size, ClientQueryInfo* clientInfo = NULL);
-	void record_clientQuerySendSize(unsigned int hashCode, unsigned int size, ClientQueryInfo* clientInfo = NULL);
+	void record_clientQueryRecvSize(Connection& conn, unsigned int hashCode,
+			unsigned int size, ClientQueryInfo* clientInfo = NULL);
+	void record_clientQuerySendSize(Connection& conn, unsigned int hashCode, unsigned int size,
+			ClientQueryInfo* clientInfo = NULL);
 	void record_clientQueryAddSql(Connection& conn, ClientQueryInfo* clientInfo = NULL);
 	void record_clientQueryExec(unsigned int sqlHashCode, unsigned int clientAddressHashCode,
 			ClientQueryInfo* clientInfo = NULL);
@@ -87,13 +89,15 @@ public:
 	void record_clientQueryOnLineTime(unsigned int hashCode, u_uint64 time, ClientQueryInfo* clientInfo = NULL);
 	void record_clientQueryOffLine(unsigned int hashCode, ClientQueryInfo* clientInfo = NULL);
 	void record_clientQueryAllocServerFail(unsigned int hashCode, ClientQueryInfo* clientInfo = NULL);
-	void record_clientQueryAddNewClient(unsigned int hashCode, std::string address);
+	void record_clientQueryAddNewClient(unsigned int connHashCode, unsigned int hashCode,
+			std::string caddress, int cport, std::string saddress, int sport);
 	ClientQueryInfo* record_getClientQueryInfo(unsigned int hashCode);
 
-	void record_sqlInfoRecvSize(unsigned int hashCode, unsigned int size, SqlInfo* sqlInfo = NULL);
+	void record_sqlInfoRecvSize(Connection& conn, unsigned int hashCode,
+			unsigned int size, SqlInfo* sqlInfo = NULL);
 	void record_sqlInfoAddSql(Connection& conn);
 	void record_sqlInfoExec(unsigned int hashCode, SqlInfo* sqlInfo = NULL);
-	void record_sqlInfoExecTran(unsigned int hashCode, SqlInfo* sqlInfo = NULL);
+	void record_sqlInfoExecTran(Connection& conn, unsigned int hashCode, SqlInfo* sqlInfo = NULL);
 	void record_sqlInfoRecvResult(Connection& conn, unsigned int rows, SqlInfo* sqlInfo = NULL);
 	void record_sqlInfoExecFail(Connection& conn, SqlInfo* sqlInfo = NULL);
 	SqlInfo* record_getSqlInfo(unsigned int hashCode);
@@ -103,6 +107,8 @@ public:
 	void record_clientUserAppInfoAdd(std::string hostName,
 			std::string userName, std::string appName, unsigned int hashCode);
 	void record_clientUserAppInfoAddSql(unsigned int hashCode, unsigned int sqlHashCode);
+
+	void record_stop(){Record::dbManager.set_stop();}
 private:
 	Record() {
 		this->sum_clientConn = 0;
@@ -156,6 +162,8 @@ public:
 	static MutexLock bakRecordMutex;
 	static Record *bakRecord;
 	u_uint64 bakRecordStartTime;
+
+	static DBManager dbManager;
 };
 }
 

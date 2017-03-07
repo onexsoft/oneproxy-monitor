@@ -36,6 +36,11 @@
 #include <set>
 #include <iostream>
 
+typedef struct _socket_end_t{
+	unsigned int port;
+	std::string address;
+}SocketEndT;
+
 class TcpServer{
 public:
 	TcpServer();
@@ -59,7 +64,7 @@ private:
 
 private:
 	std::vector<NetworkSocket> servSct;
-	std::map<unsigned int, unsigned int> fdPortMap;
+	std::map<unsigned int, SocketEndT> fdPortMap;
 	IoEvent *ioEvent;
 	int listenBackLog;
 	bool isStopServer;

@@ -92,7 +92,8 @@ int ClientThread::add_task(NetworkSocket* ns)
 	config()->update_globalTime();
 
 	Connection *conn = new Connection();
-	conn->createConnTime = config()->get_globalMillisecondTime();
+	conn->createConnTime = ns->get_attachData().get_connTime();
+	conn->connection_hashcode = ns->get_attachData().get_connHashCode();
 	conn->activeTime = config()->get_globalSecondTime();//use global time, decrease call system api
 	conn->clins() = ns;
 	conn->sessData.clientInfo = record()->record_getClientQueryInfo(ns->get_addressHashCode());

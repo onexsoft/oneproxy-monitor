@@ -55,7 +55,18 @@ void OneproxyServer::accept_clientRequest(NetworkSocket *clientSocket)
 
 	unsigned int clientHashCode = Tool::quick_hash_code(clientSocket->get_address().c_str(), clientSocket->get_address().length());
 	clientSocket->set_addressHashCode(clientHashCode);
-	record()->record_clientQueryAddNewClient(clientSocket->get_addressHashCode(), clientSocket->get_address());
+	clientSocket->get_attachData().set_connTime(config()->get_globalMillisecondTime());
+	unsigned int connHashCode = Tool::quick_conn_hash_code(clientSocket->get_address(),
+			clientSocket->get_port(), clientSocket->get_attachData().get_listenAddr(),
+			clientSocket->get_attachData().get_listenPort(), clientSocket->get_attachData().get_connTime());
+	clientSocket->get_attachData().set_connHashCode(connHashCode);
+
+	record()->record_clientQueryAddNewClient(connHashCode,
+			clientSocket->get_addressHashCode(),
+			clientSocket->get_address(),
+			clientSocket->get_port(),
+			clientSocket->get_attachData().get_listenAddr(),
+			clientSocket->get_attachData().get_listenPort());
 
 	logs(Logger::DEBUG, "accept fd: %d", clientSocket->get_fd());
 	if (this->connectManager->get_taskSize() > 0) {

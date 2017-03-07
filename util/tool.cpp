@@ -101,6 +101,18 @@ unsigned int Tool::quick_hash_code(const char* data , const int len)
 	return hash;
 }
 
+unsigned int Tool::quick_conn_hash_code(std::string caddr, int cport,
+		std::string saddr, int sport, u_uint64 connTime) {
+	std::stringstream ss;
+	ss << caddr;
+	ss << cport;
+	ss << saddr;
+	ss << sport;
+	ss << connTime;
+	std::string str = ss.str();
+	return Tool::quick_hash_code(str.c_str(), str.length());
+}
+
 int Tool::byte2string(const u_uint8* bdata, const unsigned int bdataLen, std::string& str)
 {
 	if (bdataLen <= 0)

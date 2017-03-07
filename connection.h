@@ -201,13 +201,20 @@ typedef struct _connection_t {
 	SessionData sessData;
 	ConnExecStatus status;
 	void* clientThreadObj;
+
+	u_uint32 connection_hashcode; // for save data to database.
+	u_uint32 currExecSqlHash;//add by hui@20170307 for save data to database.
+
 	_connection_t() {
 		this->protocolBase = NULL;
 		this->createConnTime = 0;
 		this->activeTime = 0;
+		this->connection_hashcode = 0;
+		this->currExecSqlHash = 0;
 		this->status = CONN_EXEC_STATUS_NORMAL;
 		this->clientThreadObj = NULL;
 	}
+
 #define clins() sock.curclins
 #define servns() sock.curservs
 #define curdb() database.currentDataBase

@@ -40,6 +40,9 @@ class Tool{
 public:
 
 	static unsigned int quick_hash_code(const char* string, const int len);
+	static unsigned int quick_conn_hash_code(std::string caddr, int cport,
+			std::string saddr, int sport, u_uint64 connTime);
+
 
 	static int byte2string(const u_uint8* bdata, const unsigned int bdataLen, std::string& str);
 	static int string2byte(const std::string& str, StringBuf& bdata);

@@ -407,7 +407,7 @@ int ProtocolBase::parse_sql(Connection& conn, std::string sqlText)
 //统计读取到前端的数据
 void ProtocolBase::stat_readFrontData(Connection& conn)
 {
-	record()->record_clientQuerySendSize(conn.clins()->get_addressHashCode(),
+	record()->record_clientQuerySendSize(conn, conn.clins()->get_addressHashCode(),
 			conn.clins()->get_recvData().get_length(), conn.sessData.clientInfo);
 }
 
@@ -415,12 +415,12 @@ void ProtocolBase::stat_readFrontData(Connection& conn)
 void ProtocolBase::stat_readBackendData(Connection& conn)
 {
 	lif (conn.clins() != NULL && conn.servns() != NULL) {
-		record()->record_clientQueryRecvSize(conn.clins()->get_addressHashCode(),
+		record()->record_clientQueryRecvSize(conn, conn.clins()->get_addressHashCode(),
 				conn.servns()->get_recvData().get_length(), conn.sessData.clientInfo);
 	}
 
 	lif (conn.servns() != NULL) {
-		record()->record_sqlInfoRecvSize(conn.record.sqlInfo.sqlHashCode,
+		record()->record_sqlInfoRecvSize(conn, conn.record.sqlInfo.sqlHashCode,
 				conn.servns()->get_recvData().get_length(), conn.sessData.sqlInfo);
 	}
 }
@@ -520,7 +520,7 @@ void ProtocolBase::stat_executeSql(Connection& conn)
 	//in trans.
 	if (conn.record.type >= TRANS_QUERY_TYPE && conn.record.type < TRANS_QUERY_SUM) {
 		conn.record.sqlSet.insert(conn.record.sqlInfo.sqlHashCode);
-		record()->record_sqlInfoExecTran(conn.record.sqlInfo.sqlHashCode, conn.sessData.sqlInfo);
+		record()->record_sqlInfoExecTran(conn, conn.record.sqlInfo.sqlHashCode, conn.sessData.sqlInfo);
 	}
 }
 

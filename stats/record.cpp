@@ -29,12 +29,19 @@
 #include "record.h"
 #include "systemapi.h"
 #include "conf/config.h"
+#include "db_define.h"
+#include "tool.h"
+#include <string>
+#include <iostream>
+#include <sstream>
 
 namespace stats{
 MutexLock Record::recordMutex;
 int Record::realRecordTime = 10;
 Record* Record::bakRecord = NULL;
 MutexLock Record::bakRecordMutex;
+
+DBManager Record::dbManager;
 
 Record* Record::get_recordInstance()
 {
@@ -455,23 +462,49 @@ SqlInfo* Record::find_sqlInfo(unsigned int sqlHashCode)
 	return sqlInfo;
 }
 
-void Record::record_clientQueryRecvSize(unsigned int hashCode, unsigned int size, ClientQueryInfo* clientInfo)
+void Record::record_clientQueryRecvSize(Connection& conn, unsigned int hashCode,
+		unsigned int size, ClientQueryInfo* clientInfo)
 {
 	if (clientInfo == NULL)
 		clientInfo = this->record_getClientQueryInfo(hashCode);
 	if (clientInfo != NULL) {
 		clientInfo->part.downDataSize += size;
-		return;
+	}
+
+	if (conn.connection_hashcode > 0) {
+		ClientInfoT* cit = ClientInfoT::create_instance();
+		cit->connHashCode = conn.connection_hashcode;
+		cit->hashcode = hashCode;
+		cit->recvSize = size;
+		cit->sendSize = 0;
+
+		DBDataT dt;
+		dt.type = DB_DATA_TYPE_CLIENT_INFO_UPDATE;
+		dt.data = cit;
+		Record::dbManager.add_taskData(dt);
 	}
 }
 
-void Record::record_clientQuerySendSize(unsigned int hashCode, unsigned int size, ClientQueryInfo* clientInfo)
+void Record::record_clientQuerySendSize(Connection& conn, unsigned int hashCode,
+		unsigned int size, ClientQueryInfo* clientInfo)
 {
 	if (clientInfo == NULL)
 		clientInfo = this->record_getClientQueryInfo(hashCode);
 	if (clientInfo != NULL) {
 		clientInfo->part.upDataSize += size;
-		return;
+	}
+
+	if (conn.connection_hashcode > 0) {
+		ClientInfoT* cit = ClientInfoT::create_instance();
+		cit->connHashCode = conn.connection_hashcode;
+		cit->hashcode = hashCode;
+		cit->recvSize = 0;
+		cit->sendSize = size;
+
+		DBDataT dt;
+		dt.type = DB_DATA_TYPE_CLIENT_INFO_UPDATE;
+		dt.data = cit;
+		Record::dbManager.add_taskData(dt);
 	}
 }
 
@@ -483,6 +516,18 @@ void Record::record_clientQueryAddSql(Connection& conn, ClientQueryInfo* clientI
 		this->clientQueryMapLock.lock();
 		clientInfo->sqlList.insert(conn.record.sqlInfo.sqlHashCode);
 		this->clientQueryMapLock.unlock();
+	}
+
+	if (conn.connection_hashcode > 0 && conn.currExecSqlHash > 0) {
+		ClientSqlRetS* csrs = ClientSqlRetS::create_instance();
+		csrs->conn_hashcode = conn.connection_hashcode;
+		csrs->sql_hashcode = conn.record.sqlInfo.sqlHashCode;
+		csrs->sqlexec_hashcode = conn.currExecSqlHash;
+
+		DBDataT dt;
+		dt.type = DB_DATA_TYPE_CLIENT_ADD_SQL;
+		dt.data = csrs;
+		Record::dbManager.add_taskData(dt);
 	}
 }
 
@@ -550,17 +595,37 @@ void Record::record_clientQueryAllocServerFail(unsigned int hashCode, ClientQuer
 	}
 }
 
-void Record::record_clientQueryAddNewClient(unsigned int hashCode, std::string address)
+void Record::record_clientQueryAddNewClient(unsigned int connHashCode, unsigned int hashCode,
+		std::string caddress, int cport, std::string saddress, int sport)
 {
 	this->clientQueryMapLock.lock();
 	ClientQueryInfo* clientInfo = &this->clientQueryMap[hashCode];
 	clientInfo->part.hashCode = hashCode;
 	clientInfo->part.connectNum ++;
-	clientInfo->ipAddr = address;
+	clientInfo->ipAddr = caddress;
 	clientInfo->part.onLineStatus = true;
 	clientInfo->part.start_connect_time = config()->get_globalMillisecondTime();
 	clientInfo->latest_connect_time = (u_uint64)SystemApi::system_time();
 	this->clientQueryMapLock.unlock();
+
+	if (connHashCode <= 0)
+		return;
+
+	ClientInfoT* cit = ClientInfoT::create_instance();
+	cit->connHashCode = connHashCode;
+	cit->clientIp = caddress;
+	cit->cport = cport;
+	cit->hashcode = hashCode;
+	cit->serverIp = saddress;
+	cit->sport = sport;
+	cit->start_connect_time = clientInfo->part.start_connect_time;
+	cit->sendSize = 0;
+	cit->recvSize = 0;
+
+	DBDataT dt;
+	dt.type = DB_DATA_TYPE_CLIENT_INFO;
+	dt.data = cit;
+	Record::dbManager.add_taskData(dt);
 }
 
 ClientQueryInfo* Record::record_getClientQueryInfo(unsigned int hashCode)
@@ -577,13 +642,25 @@ ClientQueryInfo* Record::record_getClientQueryInfo(unsigned int hashCode)
 	return info;
 }
 
-void Record::record_sqlInfoRecvSize(unsigned int hashCode, unsigned int size, SqlInfo* sqlInfo)
+void Record::record_sqlInfoRecvSize(Connection& conn, unsigned int hashCode,
+		unsigned int size, SqlInfo* sqlInfo)
 {
 	if (sqlInfo == NULL) {
 		sqlInfo = this->record_getSqlInfo(hashCode);
 	}
 	if (sqlInfo) {
 		sqlInfo->part.recvSize += size;
+	}
+
+	if (conn.currExecSqlHash > 0) {
+		SqlExecS *ses = SqlExecS::create_instance();
+		ses->sqlExecHashCode = conn.currExecSqlHash;
+		ses->connHashCode = conn.connection_hashcode;
+		ses->recvSize = size;
+		DBDataT dt;
+		dt.type = DB_DATA_TYPE_CLIENT_EXEC_SQL_UPDATE_DATASIZE;
+		dt.data = ses;
+		Record::dbManager.add_taskData(dt);
 	}
 }
 
@@ -603,6 +680,30 @@ void Record::record_sqlInfoAddSql(Connection& conn)
 		}
 	}
 	this->sqlInfoMapLock.unlock();
+
+	SqlInfoS* sis = SqlInfoS::create_instance();
+	sis->execTime = config()->get_globalMillisecondTime();
+	sis->connHashCode = conn.connection_hashcode;
+	sis->sqlHashCode = conn.sessData.sqlInfo->part.hashCode;
+	sis->queryType = (int)conn.sessData.sqlInfo->part.type;
+	sis->sql = conn.sessData.sqlInfo->sqlText;
+	sis->tabCnt = conn.sessData.sqlInfo->part.tabs;
+	for (unsigned int i = 0; i < conn.sessData.sqlInfo->part.tabs; ++i) {
+		sis->tabNameVec.push_back(conn.record.sqlInfo.tableNameVec.at(i));
+	}
+	{
+		//generate execute sql hash code.
+		std::stringstream ss;
+		ss << sis->execTime << sis->connHashCode << sis->sqlHashCode;
+		std::string str = ss.str();
+		sis->sqlExecHashCode = Tool::quick_hash_code(str.c_str(), str.length());
+		conn.currExecSqlHash = sis->sqlExecHashCode;
+	}
+
+	DBDataT dt;
+	dt.type = DB_DATA_TYPE_CLIENT_EXEC_SQL;
+	dt.data = sis;
+	Record::dbManager.add_taskData(dt);
 }
 
 void Record::record_sqlInfoExec(unsigned int hashCode, SqlInfo* sqlInfo)
@@ -615,7 +716,7 @@ void Record::record_sqlInfoExec(unsigned int hashCode, SqlInfo* sqlInfo)
 	}
 }
 
-void Record::record_sqlInfoExecTran(unsigned int hashCode, SqlInfo* sqlInfo)
+void Record::record_sqlInfoExecTran(Connection& conn, unsigned int hashCode, SqlInfo* sqlInfo)
 {
 	if (sqlInfo == NULL) {
 		sqlInfo = this->record_getSqlInfo(hashCode);
@@ -623,20 +724,45 @@ void Record::record_sqlInfoExecTran(unsigned int hashCode, SqlInfo* sqlInfo)
 	if (sqlInfo) {
 		sqlInfo->part.trans++;
 	}
+
+	if (conn.currExecSqlHash > 0) {
+		SqlExecS *ses = SqlExecS::create_instance();
+		ses->sqlExecHashCode = conn.currExecSqlHash;
+		ses->connHashCode = conn.connection_hashcode;
+		ses->inTrans = 1;
+		DBDataT dt;
+		dt.type = DB_DATA_TYPE_CLIENT_EXEC_SQL_UPDATE_TRANS;
+		dt.data = ses;
+		Record::dbManager.add_taskData(dt);
+	}
 }
 
 void Record::record_sqlInfoRecvResult(Connection& conn, unsigned int rows, SqlInfo* sqlInfo)
 {
 	time_t ttime = config()->get_globalMillisecondTime();
+	int tmpRows = 0;
 	if (sqlInfo == NULL)
 		sqlInfo = this->record_getSqlInfo(conn.record.sqlInfo.sqlHashCode);
 	if (sqlInfo) {
 		sqlInfo->part.execTime += ttime - conn.record.startQueryTime;
 		if ((conn.record.totalRow != rows) && (rows != 0)) {
 			sqlInfo->part.totalRow += rows;
+			tmpRows = rows;
 		} else {
+			tmpRows = conn.record.totalRow;
 			sqlInfo->part.totalRow += conn.record.totalRow;
 		}
+	}
+
+	if (conn.currExecSqlHash > 0) {
+		SqlExecS *ses = SqlExecS::create_instance();
+		ses->sqlExecHashCode = conn.currExecSqlHash;
+		ses->connHashCode = conn.connection_hashcode;
+		ses->rowNum = tmpRows;
+		DBDataT dt;
+		dt.type = DB_DATA_TYPE_CLIENT_EXEC_SQL_UPDATE_ROWNUM;
+		dt.data = ses;
+		Record::dbManager.add_taskData(dt);
 	}
 }
 
@@ -648,6 +774,17 @@ void Record::record_sqlInfoExecFail(Connection& conn, SqlInfo* sqlInfo)
 	if (sqlInfo) {
 		sqlInfo->part.execTime += ttime - conn.record.startQueryTime;
 		sqlInfo->part.fail++;
+	}
+
+	if (conn.currExecSqlHash > 0) {
+		SqlExecS *ses = SqlExecS::create_instance();
+		ses->sqlExecHashCode = conn.currExecSqlHash;
+		ses->connHashCode = conn.connection_hashcode;
+		ses->fail = 1;
+		DBDataT dt;
+		dt.type = DB_DATA_TYPE_CLIENT_EXEC_SQL_UPDATE_FAIL;
+		dt.data = ses;
+		Record::dbManager.add_taskData(dt);
 	}
 }
 
@@ -667,6 +804,8 @@ SqlInfo* Record::record_getSqlInfo(unsigned int hashCode)
 
 void Record::record_transInfoEndTrans(unsigned int transHashCode, Connection& conn)
 {
+	TransInfoS* tis = TransInfoS::create_instance();
+
 	u_uint64 finishedTime = config()->get_globalMillisecondTime();
 	this->transInfoMapLock.lock();
 	TransInfo& info = this->transInfoMap[transHashCode];
@@ -674,6 +813,7 @@ void Record::record_transInfoEndTrans(unsigned int transHashCode, Connection& co
 		std::set<unsigned int>::iterator it = conn.record.sqlSet.begin();
 		for(; it != conn.record.sqlSet.end(); ++it) {
 			info.sqlHashCode.insert(*it);
+			tis->sqlVec.push_back(*it);
 		}
 	}
 
@@ -694,6 +834,17 @@ void Record::record_transInfoEndTrans(unsigned int transHashCode, Connection& co
 		info.part.rollbackTimes++;
 	}
 	this->transInfoMapLock.unlock();
+	tis->start_time = conn.record.trans_start_time;
+	tis->end_time = config()->get_globalMillisecondTime();
+	tis->connHashCode = conn.connection_hashcode;
+	tis->transHashCode = transHashCode;
+
+	if (tis->connHashCode > 0) {
+		DBDataT dt;
+		dt.type = DB_DATA_TYPE_CLIENT_EXEC_TRANS;
+		dt.data = tis;
+		Record::dbManager.add_taskData(dt);
+	}
 }
 
 void Record::record_clientUserAppInfoAdd(std::string hostName,
