@@ -37,17 +37,33 @@ typedef enum select_event_type_t{
 	SELECT_EVENT_WRITE,
 	SELECT_EVENT_ACCEPT
 }SelectEventType;
+
+typedef struct _select_timer_s{
+	u_uint64 timer_time;
+	bool isRepeat;
+}SelectTimerS;
+
+#define ONE_SECOND 1000
+
 IoSelect::IoSelect(std::string name)
 	:IoEvent(name)
 {
 	mutexLock.set_name(name + mutexLock.get_name());
 	this->maxfd = 0;
+	this->loopMinTime = 1000000;
 	this->fdsetSet.clear();
-	FD_ZERO(&this->fdset);
+	FD_ZERO(&this->readFdSet);
+	FD_ZERO(&this->writeFdSet);
 }
 
 IoSelect::~IoSelect()
 {
+	while(this->get_timerMap().size()) {
+		IoEvent::TimerEventMapType::iterator it = this->get_timerMap().begin();
+		this->del_timerEventInfo(it->first);
+		SelectTimerS* et = (SelectTimerS*)it->first;
+		delete et;
+	}
 }
 
 int IoSelect::add_ioEvent(unsigned int fd, unsigned int event, Func func, void* args)
@@ -73,7 +89,11 @@ int IoSelect::add_ioEvent(unsigned int fd, unsigned int event, Func func, void* 
 #endif
 	mutexLock.lock();
 	this->add_ioEventInfo(fd, eventInfo, is_new);
-	FD_SET(fd, &this->fdset);
+	if (event == SELECT_EVENT_WRITE) {
+		FD_SET(fd, &this->writeFdSet);
+	} else {
+		FD_SET(fd, &this->readFdSet);
+	}
 	this->fdsetSet.insert(fd);
 	if (fd > this->maxfd)
 		this->maxfd = fd;
@@ -93,7 +113,6 @@ int IoSelect::add_ioEventWrite(unsigned int fd, Func func, void *args)
 
 int IoSelect::add_ioEventAccept(unsigned int fd, Func func, void *args)
 {
-	logs(Logger::INFO, "add accept fd(%d) to event", fd);
 	return this->add_ioEvent(fd, SELECT_EVENT_ACCEPT, func, args);
 }
 
@@ -116,9 +135,14 @@ bool IoSelect::is_writeEvent(unsigned int event)
 void IoSelect::del_ioEvent(unsigned int fd)
 {
 	mutexLock.lock();
+	EventInfo* ei = this->get_IoEventInfo(fd);
+	if (ei->event == SELECT_EVENT_WRITE) {
+		FD_CLR(fd, &this->writeFdSet);
+	} else {
+		FD_CLR(fd, &this->readFdSet);
+	}
 	this->del_ioEventInfo(fd);
 	this->fdsetSet.erase(fd);
-	FD_CLR(fd, &this->fdset);
 	if (fd >= this->maxfd) {
 		if (this->fdsetSet.size() <= 0) {
 			this->maxfd = 0;
@@ -130,54 +154,107 @@ void IoSelect::del_ioEvent(unsigned int fd)
 	mutexLock.unlock();
 }
 
+//after and repeat all is second.
+int IoSelect::add_timerEvent(double after, double repeat, TimerFunc func, void* args)
+{
+	EventInfo event;
+	event.event = 0;
+	event.fp = (Func)func;
+	event.func_param = args;
+	event.after = after;
+	event.repeat = repeat;
+
+	SelectTimerS* timer = new SelectTimerS();
+	timer->timer_time = SystemApi::system_millisecond() + (int)(after * ONE_SECOND);
+	this->add_timerEventInfo(timer, event);
+
+	if (fabs(repeat) < 0.00001) {
+		timer->isRepeat = false;
+	} else {
+		timer->isRepeat = true;
+	}
+
+	int tmpAfter = (int)(after * ONE_SECOND);
+	int tmpRepeat = (int)(repeat * ONE_SECOND);
+	int tmpMinTime = tmpAfter > tmpRepeat ? (tmpRepeat > 0 ? tmpRepeat : tmpAfter)
+			: (tmpAfter > 0 ? tmpAfter : tmpRepeat);
+	if (tmpMinTime < this->loopMinTime || this->loopMinTime <= 0) {
+		if (tmpMinTime > 0) {
+			this->loopMinTime = tmpMinTime;
+		}
+	}
+
+	return 0;
+}
+
 void IoSelect::run_loop() {
 	while(this->is_stop() == false) {
-		this->run_loopWithTimeout(-1);
+		this->run_loopWithTimeout(this->loopMinTime);
 	}
+}
+
+void IoSelect::regester_checkQuit() {
+	this->add_timerEvent(1.0, 1.0, IoEvent::check_quit, this);
 }
 
 //run,ms
 void IoSelect::run_loopWithTimeout(int timeout)
 {
-	fd_set readSet, writeSet;
-	struct timeval time;
-	time.tv_sec = 0;
-	time.tv_usec = timeout;
+	struct timeval tt;
+	tt.tv_sec = timeout/1000;
+	tt.tv_usec = (timeout%1000) * 1000;
+	if (this->get_eventMap().size() > 0) {
+		fd_set readSet, writeSet;
+		readSet = this->readFdSet;
+		writeSet = this->writeFdSet;
+		int ret = 0;
+		do {
+			ret = select (this->maxfd + 1, &readSet, &writeSet, NULL, &tt);
+			if (ret < 0)
+				errno = SystemApi::system_errno();
+		} while(ret < 0 && errno == EINTR);
 
-	if (this->get_eventMap().size() <= 0) {
-		if (timeout > 0) {
-			SystemApi::system_sleep(timeout);
+		if (ret < 0) {
+			errno = SystemApi::system_errno();
+			logs(Logger::ERR, "maxfd: %d, select(%s) error(%d:%s)",this->maxfd, this->get_eventName().c_str(),
+					errno, SystemApi::system_strerror(errno));
+			return;
+		} else if (ret > 0) {
+			IoEvent::IoEventMapType eventMap = this->get_eventMap();
+			IoEvent::IoEventMapType::iterator it = eventMap.begin();
+			for (; it != eventMap.end(); ++it) {
+				unsigned int fd = it->first;
+				if ((FD_ISSET(fd, &readSet) && (it->second.event == SELECT_EVENT_READ || it->second.event == SELECT_EVENT_ACCEPT))
+						|| (FD_ISSET(fd, &writeSet) && it->second.event == SELECT_EVENT_WRITE)) {
+					it->second.fp(fd, it->second.event, it->second.func_param);
+				}
+			}
 		}
-		return;
-	}
-	readSet = this->fdset;
-	writeSet = this->fdset;
-
-	int ret = 0;
-	if (timeout == 0) {
-		ret = select (this->maxfd + 1, &readSet, &writeSet, NULL, 0);
-	} else if (timeout == -1) {
-		ret = select (this->maxfd + 1, &readSet, &writeSet, NULL, NULL);
 	} else {
-		ret = select (this->maxfd + 1, &readSet, &writeSet, NULL, &time);
+		int ret = 0;
+		do {
+			ret = select(0, NULL, NULL, NULL, &tt);
+			if (ret < 0)
+				errno = SystemApi::system_errno();
+		} while(ret < 0 && errno == EINTR);
 	}
 
-	if (ret < 0) {
-		errno = SystemApi::system_errno();
-		logs(Logger::ERR, "maxfd: %d, select(%s) error(%d:%s)",this->maxfd, this->get_eventName().c_str(),
-				errno, SystemApi::system_strerror(errno));
-		return;
-	} else if (ret == 0) {//表示没有socket可读写
-		return;
-	}
+	IoEvent::TimerEventMapType& timerEventMap = this->get_timerMap();
+	IoEvent::TimerEventMapType::iterator it = timerEventMap.begin();
+	u_uint64 current_time = SystemApi::system_millisecond();
+	for(; it != timerEventMap.end(); ++it) {
+		SelectTimerS* sts = (SelectTimerS*)it->first;
+		EventInfo& ei = it->second;
+		if (current_time >= sts->timer_time) {
+			TimerFunc tf = (TimerFunc)ei.fp;
+			tf(ei.func_param);
 
-	IoEvent::IoEventMapType eventMap = this->get_eventMap();
-	IoEvent::IoEventMapType::iterator it = eventMap.begin();
-	for (; it != eventMap.end(); ++it) {
-		unsigned int fd = it->first;
-		if ((FD_ISSET(fd, &readSet) && (it->second.event == SELECT_EVENT_READ || it->second.event == SELECT_EVENT_ACCEPT))
-				|| (FD_ISSET(fd, &writeSet) && it->second.event == SELECT_EVENT_WRITE)) {
-			it->second.fp(fd, it->second.event, it->second.func_param);
+			if (!sts->isRepeat) {
+				this->del_timerEventInfo(sts);
+				delete sts;
+			} else {
+				sts->timer_time = current_time + (int)(ei.repeat * ONE_SECOND);
+			}
 		}
 	}
 }

@@ -30,6 +30,11 @@
 #include "logger.h"
 #include "systemapi.h"
 #include <errno.h>
+#ifdef _WIN32
+#include <winsock.h>
+#else
+#include <sys/socket.h>
+#endif
 
 int SocketUtil::socket_writeData(int fd, const void* data, const unsigned int dataLen, int microsecond)
 {
@@ -42,21 +47,21 @@ int SocketUtil::socket_writeData(int fd, const void* data, const unsigned int da
 		return -1;
 
 	do {
-		int ret = write(fd, (const void*)((char*)data + writedLen), dataLen - writedLen);
+		int ret = send(fd, (const char*)((char*)data + writedLen), dataLen - writedLen, 0);
 		if (ret < 0) {
 			errno = SystemApi::system_errno();
 #ifdef _WIN32
-			if (errno == WSAEWOULDBLOCK) {
-				SystemApi::system_sleep(microsecond);
-				continue;
-			}
+			if (errno == WSAEWOULDBLOCK)
 #else
-			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+#endif
+			{
 				SystemApi::system_sleep(microsecond);
 				continue;
 			}
+			logs(Logger::ERR, "write data fail. errno: %d, errmsg:%s", errno, SystemApi::system_strerror(errno));
 			return -1;
-#endif
+
 		} else if ((ret + writedLen) >= (int)dataLen) {
 			return 0;
 		}
@@ -72,21 +77,19 @@ int SocketUtil::socket_readData(int fd, void* data, const unsigned int dataLen, 
 		return -1;
 
 	do{
-		int ret = read(fd, data, dataLen);
+		int ret = recv(fd, (char*)data, dataLen, 0);
 		if (ret < 0) {
 			errno = SystemApi::system_errno();
 #ifdef _WIN32
-			if (errno == WSAEWOULDBLOCK) {
-				SystemApi::system_sleep(microsecond);
-				continue;
-			}
+			if (errno == EAGAIN || errno == WSAEWOULDBLOCK)
 #else
-			if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
+#endif
+			{
 				SystemApi::system_sleep(microsecond);
 				continue;
 			}
 			return -1;
-#endif
 		} else {
 			return ret;
 		}
@@ -108,16 +111,14 @@ int SocketUtil::socket_readAllData(int fd, StringBuf& sb, int microsecond)
 		}
 
 		sb.reallocMem(sb.get_length() + dataLen);
-		int len = read(fd, (char*)(sb.addr() + sb.length()), dataLen);
+		int len = recv(fd, (char*)(sb.addr() + sb.length()), dataLen, 0);
 		if (len == -1) {
 			errno = SystemApi::system_errno();
 #ifdef linux
-			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-				SystemApi::system_sleep(microsecond);
-				continue;
-			}
+			if (errno == EAGAIN || errno == EWOULDBLOCK)
 #else
-			if (errno == EAGAIN || errno == WSAEWOULDBLOCK) {
+			if (errno == EAGAIN || errno == WSAEWOULDBLOCK)
+			{
 				SystemApi::system_sleep(microsecond);
 				continue;
 			}

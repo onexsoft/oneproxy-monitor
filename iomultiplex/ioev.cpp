@@ -159,7 +159,7 @@ void IOEv::timerEv_cb(EV_P_ ev_timer *w, int revents)
 	TimerFunc tf = (TimerFunc)ei->fp;
 	tf(ei->func_param);
 
-	if (fabs(ei->repeat) < 0.00001) {
+	if (fabs(ei->repeat) < 0.000001) {
 		ioev->del_timerEventInfo(w);
 		delete w;
 	}

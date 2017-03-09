@@ -49,7 +49,12 @@ public:
 		this->m_lock.unlock();
 	}
 	void handle_taskData();
-	void set_stop(){ this->m_isStop = true;}
+	void set_stop(){
+		this->m_isStop = true;
+		this->m_lock.lock();
+		this->m_lock.signal_mutexCond();
+		this->m_lock.unlock();
+	}
 private:
 	static thread_start_func(start);
 private:

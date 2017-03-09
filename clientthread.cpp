@@ -59,7 +59,6 @@ ClientThread::ClientThread(ConnectManager* connManager, std::string threadName)
 	uif(SystemApi::system_socketpair(AF_LOCAL, SOCK_STREAM, 0, this->spfd)) {
 		logs(Logger::FATAL, "create socketpair error(%s)", SystemApi::system_strerror());
 	}
-
 	this->startThread(ClientThread::start, this);
 }
 
@@ -212,7 +211,6 @@ void ClientThread::finished_connection(Connection *con, ConnFinishType type)
 	if (msns && msns->get_status() == SOCKET_STATUS_WORKING_T) {
 		logs(Logger::DEBUG, "close master socked(%d)", msns->get_fd());
 		this->ioEvent->del_ioEvent(msns->get_fd());
-//		close_ioEvent(msns);
 	} else if (msns) {
 		servIsInEvent = true;
 	}
@@ -625,12 +623,12 @@ unsigned int ClientThread::get_threadTaskNum()
 
 int ClientThread::get_socketPairReadFd()
 {
-	return this->spfd[0];
+	return this->spfd[1];
 }
 
 int ClientThread::get_socketPairWriteFd()
 {
-	return this->spfd[1];
+	return this->spfd[0];
 }
 
 int ClientThread::write_socketPair(const void* data, const unsigned int dataLen)
@@ -734,7 +732,6 @@ thread_start_func(ClientThread::start)
 	ClientThread *ct = (ClientThread*)args;
 	uif (ct == NULL)
 		return 0;
-
 	//add socket pair read end to epoll.
 	ct->ioEvent->add_ioEventRead(ct->get_socketPairReadFd(), ClientThread::read_clientSocket, ct);
 	//check connection is timeout or not

@@ -48,15 +48,21 @@ public:
 	virtual bool is_readEvent(unsigned int event);
 	virtual bool is_writeEvent(unsigned int event);
 	virtual void del_ioEvent(unsigned int fd);//remove fd event
+	virtual int add_timerEvent(double after, double repeat, TimerFunc func, void* args);
+
 	virtual void run_loop();
+	virtual void regester_checkQuit();
+
 private:
 	//run,ms
 	void run_loopWithTimeout(int timeout);
 private:
 	MutexLock mutexLock;
-	fd_set fdset;
+	fd_set readFdSet;
+	fd_set writeFdSet;
 	unsigned int maxfd;
 	std::set<unsigned int, std::greater<unsigned int> > fdsetSet;
+	int loopMinTime;
 };
 
 

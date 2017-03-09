@@ -193,14 +193,18 @@ void ConnectManager::start_child()
 			mutexLock.wait_mutexCond();
 			mutexLock.unlock();
 		}
+		if (ConnectManager::stop == true && !acceptThreadManager.is_stoped()) {
+			acceptThreadManager.stop_accept();
+		}
 	}
+
+	acceptThreadManager.stop_thread();
 }
 
 void ConnectManager::handle_signal(int sig)
 {
 	logs(Logger::ERR, "start to logout...");
 	ConnectManager::stop = true;
-	acceptThreadManager.stop_accept();
 	mutexLock.lock();
 	mutexLock.signal_mutexCond();
 	mutexLock.unlock();

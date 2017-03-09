@@ -117,7 +117,7 @@ public:
 	}
 
 	bool is_stop() {
-		return this->stopEpoll == true;
+		return this->stopEpoll;
 	}
 
 	virtual void stop_event() {

@@ -79,7 +79,9 @@ private:
 
 class AcceptThreadManager{
 public:
-	AcceptThreadManager(){}
+	AcceptThreadManager(){
+		this->stoped = false;
+	}
 
 	void start(unsigned int threadNum, ConnectManager* connManager,
 			std::string serverAddr, std::set<unsigned int>& portList, int listenBackLog = 128) {
@@ -98,9 +100,9 @@ public:
 			while(ops->get_startSuccess() == false) {SystemApi::system_sleep(1000);}
 			this->acceptThreadList.push_back(ops);
 		}
+		this->stoped = false;
 	}
 	~AcceptThreadManager() {
-		this->stop_thread();
 	}
 
 	void stop_thread() {
@@ -117,13 +119,18 @@ public:
 	}
 
 	void stop_accept() {
+		stoped = true;
 		std::list<OneproxyServer*>::iterator it = this->acceptThreadList.begin();
 		for(; it != this->acceptThreadList.end(); ++it) {
 			OneproxyServer* ops = *it;
 			ops->stop_tcpServer();
 		}
 	}
+	bool is_stoped() {
+		return stoped;
+	}
 private:
 	std::list<OneproxyServer*> acceptThreadList;
+	bool stoped;
 };
 #endif /* ONEPROXYSERVER_H_ */

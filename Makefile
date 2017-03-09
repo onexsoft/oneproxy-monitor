@@ -4,7 +4,8 @@ BUILD_TEST_BIN = utest
 ifeq ($(LANG),) #windows
 	INSTALLDIR = install
 	LDFLAGS = -static-libgcc -static-libstdc++ -L./lib -L./
-	LIBS = ./lib/win/libssl.a ./lib/win/libcrypto.a ./lib/win/libgdi32.a -lwsock32 -lwinmm -lpacket -lwpcap -lws2_32 -lIPHLPAPI ./lib/win/libgmp.a
+	LIBS = ./lib/win/libsqlite3_win64.a ./lib/win/libssl.a ./lib/win/libcrypto.a ./lib/win/libgdi32.a -lwsock32 -lwinmm -lpacket -lwpcap -lws2_32 -lIPHLPAPI ./lib/win/libgmp.a
+	
 	INCLUDE = -IC:\openssl-1.0.2e\win64\include -ID:\winlib\winpcap\Include
 else #linux
 $(shell if [ ! -d $(BUILD)/$(BUILD_TEST_BIN) ]; then mkdir -p $(BUILD)/$(BUILD_TEST_BIN); fi;)
