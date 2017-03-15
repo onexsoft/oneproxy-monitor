@@ -14,7 +14,7 @@ $(shell if [ ! -d $(BUILD)/$(BUILD_TEST_BIN) ]; then mkdir -p $(BUILD)/$(BUILD_T
 	OPENSSL = /usr/local/openssl
 	LIBEV = /usr/local/libev
 	LIBPCAP = /usr/local/libpcap
-	# -lprofiler -lunwind ./libtcmalloc_minimal.a
+	# -lprofiler -lunwind ./lib/libtcmalloc_minimal.a
 	LIBS = -pthread ./stats/database/libsqlite3.a ./lib/libgmp.a $(OPENSSL)/lib/libssl.a $(OPENSSL)/lib/libcrypto.a $(LIBEV)/lib/libev.a $(LIBPCAP)/lib/libpcap.a -ldl
 	INCLUDE = -I$(OPENSSL)/include -I$(LIBEV)/include -I$(LIBPCAP)/include
 endif

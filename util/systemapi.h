@@ -55,6 +55,7 @@
 #include <time.h>
 #include <string>
 #include <iostream>
+#include <list>
 
 #include "define.h"
 
@@ -107,7 +108,13 @@ public:
 	//设置文件描述符限制
 	static int system_setFDNum(unsigned int max_files_number);
 	static int system_socketpair(int family, int type, int protocol, int fd[2]);
+	static void system_showNetworkInterfInfo();
 	static std::string system_getIp(std::string device);
+	static std::string system_getIpOnLinux(std::string device);
+	static std::string system_getIpOnWindows(std::string device);
+	static std::string system_getDeivceName(std::string ip);
+	static int system_getIpList(std::string device, std::list<std::string>& ipList);
+
 };
 
 #endif /* UTIL_SYSTEMAPI_H_ */

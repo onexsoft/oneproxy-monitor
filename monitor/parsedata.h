@@ -32,6 +32,7 @@
 #include "thread.h"
 #include "mutexlock.h"
 #include "monitor_define.h"
+#include "monitortool.h"
 
 typedef struct _handle_func_param_t{
 	MonitorFunc func;
@@ -41,9 +42,10 @@ typedef struct _handle_func_param_t{
 typedef std::map<int, FuncParam> IntFuncParamMap;
 typedef std::map<std::string, FuncParam> StringFuncParamMap;
 
+class MonitorManager;
 class ParseData : public Thread{
 public:
-	ParseData();
+	ParseData(MonitorManager* sm);
 	virtual ~ParseData();
 	void regester_protocol();
 	void add_taskData(TaskDataT* taskData);
@@ -65,6 +67,8 @@ private:
 	IntFuncParamMap portHandleMap;
 	StringFuncParamMap nameHandleMap;
 	TaskDataKeyConnMap taskDataConnMap;//use in monitor
+	MonitorManager* m_pMonitorManager;
+	MonitorTool monitorTool;
 };
 
 #endif /* PARSEDATA_H_ */

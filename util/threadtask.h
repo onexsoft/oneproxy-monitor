@@ -80,7 +80,7 @@ template<class T>
 void ThreadTask<T>::handle_taskData() {
 	T task;
 	this->m_lock.lock();
-	if (this->m_dataList.size()) {
+	if (!this->m_dataList.empty()) {
 		task = this->m_dataList.front();
 		this->m_dataList.pop_front();
 		this->m_lock.unlock();
@@ -95,8 +95,8 @@ void ThreadTask<T>::handle_taskData() {
 template<class T>
 thread_start_func(ThreadTask<T>::start) {
 	ThreadTask* tt = (ThreadTask*)args;
-	while(tt->m_isStop == false || tt->m_dataList.size() > 0) {
-		if (tt->m_dataList.size() > 0) {
+	while(tt->m_isStop == false || !tt->m_dataList.empty()) {
+		if (!tt->m_dataList.empty()) {
 			tt->handle_taskData();
 		} else {
 			tt->m_lock.lock();

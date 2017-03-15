@@ -53,6 +53,11 @@ TcpServer::TcpServer(std::string serverAddr, unsigned int serverPort):
 
 TcpServer::~TcpServer()
 {
+	std::vector<NetworkSocket>::iterator  it = this->servSct.begin();
+	for (; it != this->servSct.end(); ++it) {
+		this->ioEvent->del_ioEvent(it->get_fd());
+	}
+
 	if (this->ioEvent != NULL) {
 		this->ioEvent->destory_instance();
 		this->ioEvent = NULL;

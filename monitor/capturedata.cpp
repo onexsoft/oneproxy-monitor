@@ -39,11 +39,6 @@ CaptureData::CaptureData(DataHandleFunc func, void* funcArgs, std::string device
 	// TODO Auto-generated constructor stub
 	this->m_func = func;
 	this->m_func_args = funcArgs;
-
-	if (device.length() <= 0) {
-		this->m_device = this->get_deviceName();
-		this->get_deviceLocalIp();
-	}
 	this->m_maxPacketSize = maxPacketSize;
 	this->m_pcapHandle = NULL;
 	this->m_pdumperHandle = NULL;
@@ -54,6 +49,9 @@ CaptureData::~CaptureData() {
 	if (this->m_pdumperHandle != NULL) {
 		pcap_dump_close(this->m_pdumperHandle);
 		this->m_pdumperHandle = NULL;
+	}
+	if (this->m_pcapHandle) {
+		pcap_close(this->m_pcapHandle);
 	}
 }
 
@@ -88,15 +86,77 @@ void CaptureData::gen_dumpFile(const struct pcap_pkthdr *header, const u_char *p
 	pcap_dump_flush(this->m_pdumperHandle);
 }
 
-#ifdef __WIN32
-void CaptureData::set_windowsLocalIp(std::string ip) {
-	this->m_localIp = ip;
+int CaptureData::get_deviceNameBaseLocalIp() {
+	if (this->m_localIp.empty()) {
+		logs(Logger::ERR, "the local ip is empty, error");
+		return -1;
+	}
+
+	std::string deviceName = SystemApi::system_getDeivceName(this->m_localIp);
+	if (deviceName.empty()) {
+		logs(Logger::ERR, "device name is empty, error");
+		return -1;
+	}
+
+	this->m_device = deviceName;
+	return 0;
 }
 
-void CaptureData::set_windowDeviceName() {
-	this->m_device = this->get_deviceNameBaseIp(this->m_localIp);
+int CaptureData::get_localIpListBaseDeviceName() {
+
+	if (this->m_device.empty()) {
+		logs(Logger::ERR, "device name is empty");
+		return -1;
+	}
+
+	this->localIpList.clear();
+	if (SystemApi::system_getIpList(this->m_device, this->localIpList)) {
+		logs(Logger::ERR, "get ip list error");
+		return -1;
+	}
+
+	if (this->localIpList.empty()) {
+		logs(Logger::WARNING, "the local ip list is empty");
+	}
+	return 0;
 }
-#endif
+
+void CaptureData::add_localIp2List(std::string ip) {
+	this->localIpList.push_back(ip);
+}
+
+bool CaptureData::is_localIp(std::string ip) {
+	if (ip.empty())
+		return false;
+	std::list<std::string>::iterator it = this->localIpList.begin();
+	for(; it != this->localIpList.end(); ++it) {
+		if ((*it) == ip) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool CaptureData::isEmpty_localIp() {
+	return this->localIpList.empty();
+}
+
+int CaptureData::get_localIpBaseDeviceName()
+{
+	if (this->m_device.empty()){
+		logs(Logger::ERR, "the device name is empty, error");
+		return -1;
+	}
+
+	std::string tip = SystemApi::system_getIp(this->m_device);
+	if (tip.empty()) {
+		logs(Logger::ERR, "ip is empty, error");
+		return -1;
+	}
+
+	this->m_localIp = tip;
+	return 0;
+}
 
 std::string CaptureData::get_deviceName() {
 	char errbuf[PCAP_ERRBUF_SIZE];
@@ -133,22 +193,13 @@ std::string CaptureData::get_deviceName() {
 std::string CaptureData::get_deviceNameBaseIp(std::string ip) {
 	std::string deviceName;
 #ifdef __WIN32
-	//PIP_ADAPTER_INFO结构体指针存储本机网卡信息
 	PIP_ADAPTER_INFO pIpAdapterInfo = new IP_ADAPTER_INFO();
-	//得到结构体大小,用于GetAdaptersInfo参数
 	unsigned long stSize = sizeof(IP_ADAPTER_INFO);
-	//调用GetAdaptersInfo函数,填充pIpAdapterInfo指针变量;其中stSize参数既是一个输入量也是一个输出量
 	int nRel = GetAdaptersInfo(pIpAdapterInfo, &stSize);
 	if (ERROR_BUFFER_OVERFLOW == nRel)
 	{
-		//如果函数返回的是ERROR_BUFFER_OVERFLOW
-		//则说明GetAdaptersInfo参数传递的内存空间不够,同时其传出stSize,表示需要的空间大小
-		//这也是说明为什么stSize既是一个输入量也是一个输出量
-		//释放原来的内存空间
 		delete pIpAdapterInfo;
-		//重新申请内存空间用来存储所有网卡信息
 		pIpAdapterInfo = (PIP_ADAPTER_INFO)new BYTE[stSize];
-		//再次调用GetAdaptersInfo函数,填充pIpAdapterInfo指针变量
 		nRel=GetAdaptersInfo(pIpAdapterInfo,&stSize);
 	}
 
@@ -156,7 +207,6 @@ std::string CaptureData::get_deviceNameBaseIp(std::string ip) {
 	{
 		while (pIpAdapterInfo && deviceName.empty())
 		{
-			//可能网卡有多IP,因此通过循环去判断
 			IP_ADDR_STRING *pIpAddrString =&(pIpAdapterInfo->IpAddressList);
 			do
 			{
@@ -175,11 +225,9 @@ std::string CaptureData::get_deviceNameBaseIp(std::string ip) {
 		}
 	}
 
-	//释放内存空间
 	if (pIpAdapterInfo)
-	{
 		delete pIpAdapterInfo;
-	}
+
 #endif
 
 	return deviceName;

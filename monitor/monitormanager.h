@@ -34,6 +34,7 @@
 #include "supermonitor.h"
 #include "managerbase.h"
 #include "pcap.h"
+#include "parsedata.h"
 
 class MonitorManager:public ManagerBase {
 public:
@@ -44,9 +45,15 @@ protected:
 	virtual void start_child();
 	static void handle_signal(int sig);
 	static void monitorData(u_char *arg, const struct pcap_pkthdr *pkthdr, const u_char *packet);
+	void stop_childThread();
+public:
+	ParseData* get_parseData(int port);
+	int get_parseDataThreadSize();
 private:
-	SuperMonitor sm;
 	CaptureData captureData;
+//	SuperMonitor sm;
+	std::vector<SuperMonitor*> m_superMonitorVec;
+	std::vector<ParseData*> m_parseDataVec;
 	static bool m_stop;
 };
 

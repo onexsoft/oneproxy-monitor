@@ -95,6 +95,11 @@ ProtocolHandleRetVal ProtocolBase::protocol_front(Connection& conn)
 	if (packet.length() > oldOffset)//when clear, the oldOffset maybe bigger than length.
 		packet.set_offset(oldOffset);
 
+	//add by huih@20170313 for monitor
+	if (config()->get_useMonitor()) {
+		packet.clear();
+	}
+
 	return resultValue;
 }
 
@@ -146,6 +151,11 @@ ProtocolHandleRetVal ProtocolBase::protocol_backend(Connection& conn)
 	} while(0);
 
 	packet.set_offset(oldOffset);
+
+	//add by huih@20170313 for monitor
+	if (config()->get_useMonitor()) {
+		packet.clear();
+	}
 
 	return resultValue;
 }

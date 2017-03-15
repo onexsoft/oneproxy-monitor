@@ -156,8 +156,14 @@ Config::Config()
 	add_oneproxyConfig("connecttimeout", "86400", &Config::cvtInt, &Config::set_connectTimeOut);//one day,unit: second.
 	add_oneproxyConfig("acceptthreadnum", "1", &Config::cvtInt, &Config::set_acceptThreadNum);
 	add_oneproxyConfig("listenbacklog", "1000", &Config::cvtInt, &Config::set_listenBackLog);
-	add_oneproxyConfig("usemonitor", "true", &Config::cvtBool, &Config::set_useMonitor);
-	add_oneproxyConfig("monitorportclass", "SSProtocol:1433;PGProtocol:5432;FakeProtocol:-1", &Config::cvtString, &Config::set_monitorPortClass);
+	add_oneproxyConfig("usemonitor", "false", &Config::cvtBool, &Config::set_useMonitor);
+	add_oneproxyConfig("monitorportclass", "SSProtocol:1433;PGProtocol:5432;", &Config::cvtString, &Config::set_monitorPortClass);
+	add_oneproxyConfig("monitordevicename", "", &Config::cvtString, &Config::set_monitorDeviceName);
+	add_oneproxyConfig("monitordumpdata", "false", &Config::cvtBool, &Config::set_monitorDumpData);
+	add_oneproxyConfig("monitoruserdb", "false", &Config::cvtBool, &Config::set_monitorUserDB);
+	add_oneproxyConfig("monitorthreadnum", "4", &Config::cvtInt, &Config::set_monitorThreadNum);
+	add_oneproxyConfig("monitorcaptureaddress", "", &Config::cvtString, &Config::set_monitorCaptureAddress);
+	add_oneproxyConfig("monitorautogetdesip", "true", &Config::cvtBool, &Config::set_monitorAutoGetDesIp);
 #undef add_oneproxyConfig
 
 #define add_dbConfig(db, key, defaultv, cvtf, setf) add_config(db, key, defaultv, (CVTFunc)cvtf, (SetFunc)setf)
@@ -278,6 +284,12 @@ void Config::print_config()
 	logs(Logger::INFO, "listenbacklog: %d", this->m_listenBackLog);
 	logs(Logger::INFO, "useMonitor: %d", this->m_useMonitor);
 	logs(Logger::INFO, "monitorPortClass:%s", this->m_monitorPortClass.c_str());
+	logs(Logger::INFO, "monitorDeviceName:%s", this->m_monitorDeviceName.c_str());
+	logs(Logger::INFO, "monitordumpdata: %d", this->m_monitorDumpData);
+	logs(Logger::INFO, "monitoruserdb:%d", this->m_monitorUserDB);
+	logs(Logger::INFO, "monitorthreadnum:%d", this->m_monitorThreadNum);
+	logs(Logger::INFO, "monitorcaptureaddress:%s", this->m_monitorCaptureAddress.c_str());
+	logs(Logger::INFO, "monitorautogetdesip: %d", this->m_monitorAutoGetDesIp);
 
 	std::vector<DataBase>::iterator it = dbVector.begin();
 	for (; it != dbVector.end(); ++it) {
@@ -420,6 +432,12 @@ int Config::handle_config()
 	std::string fp = std::string("FakeProtocol");
 	std::vector<DataBaseGroup>::iterator it = dbGroupVector.begin();
 	for(; it != dbGroupVector.end(); ++it) {
+		if (this->get_useMonitor()) {//use monitor, close all function.
+			it->set_passwordSeparate(false);
+			it->set_readSlave(false);
+			it->set_useConnectionPool(false);
+		}
+
 		if (it->get_className().size() && strncmp_s(it->get_className(), fp) == 0) {
 			it->set_passwordSeparate(false);
 			it->set_readSlave(false);
@@ -496,12 +514,12 @@ int Config::handle_args(int argc, char* argv[])
 
 	static const char usage_str[] =
 		"Usage: %s [OPTION]\n"
-		//"  -d, --daemon           Run in background (as a daemon)\n"
 		"  -q, --quiet            Run quietly\n"
 		"  -v, --verbose          Increase verbosity\n"
 		"  -V, --version          Show version\n"
 		"  -h, --help             Show this help screen and exit\n"
 		"  -f, --file             Config file path\n"
+		"  -S, --shownic          Show network interface control infomation\n"
 		"--oneproxy_address       Oneproxy listen address(default:127.0.0.1)\n"
 		"--oneproxy_port          Oneproxy listen port(default:9999); when have many ports, use comma separate\n"
 		"--httpserver_address     Http server listen address(default:127.0.0.1)\n"
@@ -526,33 +544,34 @@ int Config::handle_args(int argc, char* argv[])
 		;
 
 	static const struct option long_options[] = {
-			{"oneproxy_address", required_argument, NULL, 'a'},
-			{"httpserver_address", required_argument, NULL, 'A'},
-			{"database_host", required_argument, NULL, 'b'},
-			{"database_port", required_argument, NULL, 'c'},
-			{"daemon", no_argument, NULL, 'd'},
-			{"dump_data", no_argument, NULL, 'D'},
-			{"database_classname", required_argument, NULL, 'e'},
+//			{"oneproxy_address", required_argument, NULL, 'a'},
+//			{"httpserver_address", required_argument, NULL, 'A'},
+//			{"database_host", required_argument, NULL, 'b'},
+//			{"database_port", required_argument, NULL, 'c'},
+//			{"daemon", no_argument, NULL, 'd'},
+//			{"dump_data", no_argument, NULL, 'D'},
+//			{"database_classname", required_argument, NULL, 'e'},
 			{"file", required_argument, NULL, 'f'},
-			{"vip_ifname", required_argument, NULL, 'g'},
-			{"vip_address", required_argument, NULL, 'G'},
+//			{"vip_ifname", required_argument, NULL, 'g'},
+//			{"vip_address", required_argument, NULL, 'G'},
 			{"help", no_argument, NULL, 'h'},
-			{"passwordseparate", required_argument, NULL, 'L'},
-			{"readsalve", required_argument, NULL, 'l'},
-			{"keepalive", no_argument, NULL, 'k'},
-			{"maxconnectnum", required_argument, NULL, 'm'},
-			{"useconnectionpool", required_argument, NULL, 'o'},
-			{"oneproxy_port", required_argument, NULL, 'p'},
-			{"httpserver_port", required_argument, NULL, 'P'},
+//			{"passwordseparate", required_argument, NULL, 'L'},
+//			{"readsalve", required_argument, NULL, 'l'},
+//			{"keepalive", no_argument, NULL, 'k'},
+//			{"maxconnectnum", required_argument, NULL, 'm'},
+//			{"useconnectionpool", required_argument, NULL, 'o'},
+//			{"oneproxy_port", required_argument, NULL, 'p'},
+//			{"httpserver_port", required_argument, NULL, 'P'},
 			{"quiet", no_argument, NULL, 'q'},
-			{"log_sql", no_argument, NULL, 's'},
-			{"threadnum", required_argument, NULL, 't'},
-			{"clientusername", required_argument, NULL, 'u'},
-			{"database_username", required_argument, NULL, 'U'},
-			{"clientpassword", required_argument, NULL, 'w'},
-			{"database_password", required_argument, NULL, 'W'},
+//			{"log_sql", no_argument, NULL, 's'},
+//			{"threadnum", required_argument, NULL, 't'},
+//			{"clientusername", required_argument, NULL, 'u'},
+//			{"database_username", required_argument, NULL, 'U'},
+//			{"clientpassword", required_argument, NULL, 'w'},
+//			{"database_password", required_argument, NULL, 'W'},
 			{"verbose", no_argument, NULL, 'v'},
 			{"version", no_argument, NULL, 'V'},
+			{"shownic", no_argument, NULL, 'S'},
 			{NULL, 0, NULL, 0},
 	};
 
@@ -562,7 +581,7 @@ int Config::handle_args(int argc, char* argv[])
 	if (argc > 1) {
 		DataBase db;
 		DataBaseGroup dbg;
-		while ((c = getopt_long(argc, argv, "qvhkdVDsf:", long_options, &long_idx)) != -1) {
+		while ((c = getopt_long(argc, argv, "qvhdVSf:", long_options, &long_idx)) != -1) {
 			switch (c) {
 			case 'v':
 				config()->set_loggerLevel(Logger::INFO);
@@ -571,100 +590,105 @@ int Config::handle_args(int argc, char* argv[])
 				printf("%s\n", oneproxy_version());
 				exit(0);
 				break;
-			case 'd':
-				break;
+//			case 'd':
+//				break;
 			case 'q':
 				config()->set_loggerLevel(Logger::ERR);
 				break;
 			case 'f':
 				config()->loadConfig(optarg);
 				break;
-			case 'g':
-				config()->set_vipIfName(std::string(optarg));
-				break;
-			case 'G':
-				config()->set_vipAddress(std::string(optarg));
-				break;
-			case 'D':
-				config()->set_dumpData(true);
-				break;
-			case 's':
-				config()->set_logSql(true);
-				break;
-			case 'a':
-				config()->set_oneproxyAddr(std::string(optarg));
-				break;
-			case 'p':
-				config()->set_oneproxyPort(std::string(optarg));
-				break;
-			case 'A':
-				config()->set_httpServerAddr(std::string(optarg));
-				break;
-			case 'o':
-				if (strncmp(optarg, "true", 4)) {
-					dbg.set_useConnectionPool(true);
-				} else {
-					dbg.set_useConnectionPool(false);
-				}
-				break;
-			case 'P':
-				config()->set_httpServerPort(atoi(optarg));
-				break;
-			case 'b':
-				db.set_addr(std::string(optarg));
-				break;
-			case 'c':
-				db.set_port(atoi(optarg));
-				break;
-			case 'e':
-				dbg.set_className(std::string(optarg));
-				break;
-			case 'L':
-				if (strncmp(optarg, "true", 4)) {
-					dbg.set_passwordSeparate(true);
-				} else {
-					dbg.set_passwordSeparate(false);
-				}
-				break;
-			case 'l':
-				if (strncmp(optarg, "true", 4)){
-					dbg.set_readSlave(true);
-				} else {
-					dbg.set_readSlave(false);
-				}
-				break;
-			case 'm':
-				config()->set_maxConnectNum(atoi(optarg));
-				break;
-			case 'k':
-				config()->set_keepAlive(true);
-				break;
-			case 't':
-				config()->set_threadNum(atoi(optarg));
-				break;
-			case 'u':
-				config()->set_clientUserName(std::string(optarg));
-				break;
-			case 'U':
-			{
-				std::string un = std::string(optarg);
-				db.set_userName(un);
-			}
-				break;
-			case 'w':
-				config()->set_clientPassword(std::string(optarg));
-				break;
-			case 'W':
-			{
-				std::string passwd = std::string(optarg);
-				db.set_password(passwd);
-			}
-				break;
+//			case 'g':
+//				config()->set_vipIfName(std::string(optarg));
+//				break;
+//			case 'G':
+//				config()->set_vipAddress(std::string(optarg));
+//				break;
+//			case 'D':
+//				config()->set_dumpData(true);
+//				break;
+//			case 's':
+//				config()->set_logSql(true);
+//				break;
+//			case 'a':
+//				config()->set_oneproxyAddr(std::string(optarg));
+//				break;
+//			case 'p':
+//				config()->set_oneproxyPort(std::string(optarg));
+//				break;
+//			case 'A':
+//				config()->set_httpServerAddr(std::string(optarg));
+//				break;
+//			case 'o':
+//				if (strncmp(optarg, "true", 4)) {
+//					dbg.set_useConnectionPool(true);
+//				} else {
+//					dbg.set_useConnectionPool(false);
+//				}
+//				break;
+//			case 'P':
+//				config()->set_httpServerPort(atoi(optarg));
+//				break;
+//			case 'b':
+//				db.set_addr(std::string(optarg));
+//				break;
+//			case 'c':
+//				db.set_port(atoi(optarg));
+//				break;
+//			case 'e':
+//				dbg.set_className(std::string(optarg));
+//				break;
+//			case 'L':
+//				if (strncmp(optarg, "true", 4)) {
+//					dbg.set_passwordSeparate(true);
+//				} else {
+//					dbg.set_passwordSeparate(false);
+//				}
+//				break;
+//			case 'l':
+//				if (strncmp(optarg, "true", 4)){
+//					dbg.set_readSlave(true);
+//				} else {
+//					dbg.set_readSlave(false);
+//				}
+//				break;
+//			case 'm':
+//				config()->set_maxConnectNum(atoi(optarg));
+//				break;
+//			case 'k':
+//				config()->set_keepAlive(true);
+//				break;
+//			case 't':
+//				config()->set_threadNum(atoi(optarg));
+//				break;
+//			case 'u':
+//				config()->set_clientUserName(std::string(optarg));
+//				break;
+//			case 'U':
+//			{
+//				std::string un = std::string(optarg);
+//				db.set_userName(un);
+//			}
+//				break;
+//			case 'w':
+//				config()->set_clientPassword(std::string(optarg));
+//				break;
+//			case 'W':
+//			{
+//				std::string passwd = std::string(optarg);
+//				db.set_password(passwd);
+//			}
+//				break;
 			case 'h':
 				printf("%s\n", usage_str);
 				exit(0);
 				break;
+			case 'S':
+				SystemApi::system_showNetworkInterfInfo();
+				exit(0);
+				break;
 			default:
+				printf("Please use config file to set application parameters\n");
 				printf("%s\n", usage_str);
 				exit(1);
 			}

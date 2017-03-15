@@ -611,6 +611,7 @@ void Record::record_clientQueryAddNewClient(unsigned int connHashCode, unsigned 
 	if (connHashCode <= 0)
 		return;
 
+
 	ClientInfoT* cit = ClientInfoT::create_instance();
 	cit->connHashCode = connHashCode;
 	cit->clientIp = caddress;
@@ -626,6 +627,7 @@ void Record::record_clientQueryAddNewClient(unsigned int connHashCode, unsigned 
 	dt.type = DB_DATA_TYPE_CLIENT_INFO;
 	dt.data = cit;
 	Record::dbManager.add_taskData(dt);
+
 }
 
 ClientQueryInfo* Record::record_getClientQueryInfo(unsigned int hashCode)
@@ -680,6 +682,7 @@ void Record::record_sqlInfoAddSql(Connection& conn)
 		}
 	}
 	this->sqlInfoMapLock.unlock();
+
 
 	SqlInfoS* sis = SqlInfoS::create_instance();
 	sis->execTime = config()->get_globalMillisecondTime();
@@ -844,6 +847,8 @@ void Record::record_transInfoEndTrans(unsigned int transHashCode, Connection& co
 		dt.type = DB_DATA_TYPE_CLIENT_EXEC_TRANS;
 		dt.data = tis;
 		Record::dbManager.add_taskData(dt);
+	} else {
+		tis->free_instance();
 	}
 }
 

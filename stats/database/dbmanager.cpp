@@ -30,11 +30,12 @@
 #include "systemapi.h"
 #include "tabheader.h"
 #include "tool.h"
+#include "conf/config.h"
 
 DBManager::DBManager()
 	:ThreadTask<DBDataT>(thread_type_db, "dbmanager", DBManager::start, (void*)this){
 	// TODO Auto-generated constructor stub
-	dbBase = DBBase::createDBObject();
+	dbBase = NULL;
 }
 
 DBManager::~DBManager() {
@@ -49,6 +50,12 @@ void DBManager::start(void* data, void* args) {
 	assert(args);
 	DBDataT dbt = (DBDataT)(*((DBDataT*)data));
 	DBManager* dbm = (DBManager*)args;
+	if (config()->get_monitorUserDB()) {
+		if (dbm->dbBase == NULL) {
+			dbm->dbBase = DBBase::createDBObject();
+		}
+	}
+
 	switch (dbt.type) {
 	case DB_DATA_TYPE_CLIENT_INFO:
 	{

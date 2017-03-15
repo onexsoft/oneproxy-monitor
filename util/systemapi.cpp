@@ -44,8 +44,12 @@
 #include <sys/resource.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <netinet/in.h>
 #else
 #include "winsock2.h"
+#include "iphlpapi.h"
 #endif
 
 int SystemApi::getaddrinfo(const char *hostname, const char *service, const struct addrinfo *hints, struct addrinfo **result)
@@ -168,11 +172,6 @@ time_t SystemApi::system_time()
 {
 	time_t ttime;
 	ttime = time(NULL);
-//#ifdef linux
-//	ttime = time(NULL);
-//#else
-//	ttime = timeGetTime();
-//#endif
 	return ttime;
 }
 
@@ -609,7 +608,91 @@ int SystemApi::system_socketpair(int family, int type, int protocol, int fd[2]) 
 	return -1;
 }
 
+void SystemApi::system_showNetworkInterfInfo() {
+#ifdef _WIN32
+	PIP_ADAPTER_INFO pIpAdapterInfo = new IP_ADAPTER_INFO();
+	unsigned long stSize = sizeof(IP_ADAPTER_INFO);
+	int nRel = GetAdaptersInfo(pIpAdapterInfo, &stSize);
+	int netCardNum = 0;
+	if (ERROR_BUFFER_OVERFLOW == nRel)
+	{
+		delete pIpAdapterInfo;
+		pIpAdapterInfo = (PIP_ADAPTER_INFO)new BYTE[stSize];
+		nRel=GetAdaptersInfo(pIpAdapterInfo,&stSize);
+	}
+	if (ERROR_SUCCESS == nRel)
+	{
+		while (pIpAdapterInfo)
+		{
+			std::cout << "No:" << ++netCardNum << std::endl;
+			std::cout << "device name:" << pIpAdapterInfo->AdapterName << std::endl;
+			IP_ADDR_STRING *pIpAddrString = &(pIpAdapterInfo->IpAddressList);
+			do
+			{
+				std::cout << "ip address: " << pIpAddrString->IpAddress.String << std::endl;
+				pIpAddrString = pIpAddrString->Next;
+			} while (pIpAddrString);
+			pIpAdapterInfo = pIpAdapterInfo->Next;
+		}
+	}
+	if (pIpAdapterInfo)
+	{
+		delete pIpAdapterInfo;
+	}
+#else
+	struct ifreq ifr;
+	struct ifconf ifc;
+	char buf[2048];
+	struct  sockaddr_in my_addr;
+
+	int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+	if (sock == -1) {
+		logs(Logger::ERR, "create socket error(%s)", SystemApi::system_strerror());
+		return;
+	}
+	ifc.ifc_len = sizeof(buf);
+	ifc.ifc_buf = buf;
+	if (ioctl(sock, SIOCGIFCONF, &ifc) == -1) {
+		logs(Logger::ERR, "ioctl error(%s)", SystemApi::system_strerror());
+		close(sock);
+		return;
+	}
+
+	struct ifreq* it = ifc.ifc_req;
+	const struct ifreq* const end = it + (ifc.ifc_len / sizeof(struct ifreq));
+	int count = 0;
+
+	for(; it != end; ++it) {
+		strcpy(ifr.ifr_name, it->ifr_name);
+		if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
+			if (ioctl(sock, SIOCGIFADDR, &ifr) < 0)
+			{
+				logs(Logger::ERR, "ioctl error(%s)", SystemApi::system_strerror());
+				close(sock);
+				return;
+			}
+			char ipaddr[32] = {0};
+			memcpy(&my_addr, &ifr.ifr_addr, sizeof(my_addr));
+			strcpy(ipaddr, inet_ntoa(my_addr.sin_addr));
+			std::cout << "No: " << (++count) << " deviceName: " << it->ifr_name
+					<< " ipAddress:" << ipaddr << std::endl;
+		}
+	}
+	close(sock);
+#endif
+}
+
 std::string SystemApi::system_getIp(std::string device) {
+#ifdef linux
+	return SystemApi::system_getIpOnLinux(device);
+#else
+	return SystemApi::system_getIpOnWindows(device);
+#endif
+}
+
+std::string SystemApi::system_getIpOnLinux(std::string device)
+{
+	std::string retIp;
 #ifdef linux
 	int sock_fd;
 	struct  sockaddr_in my_addr;
@@ -636,8 +719,208 @@ std::string SystemApi::system_getIp(std::string device) {
 	memcpy(&my_addr, &ifr.ifr_addr, sizeof(my_addr));
 	strcpy(ipaddr, inet_ntoa(my_addr.sin_addr));
 	close(sock_fd);
-	return std::string(ipaddr);
-#else
-	return std::string();
+	retIp = std::string(ipaddr);
 #endif
+	return retIp;
+}
+
+std::string SystemApi::system_getIpOnWindows(std::string device)
+{
+	std::string retIp;
+#ifdef _WIN32
+	PIP_ADAPTER_INFO pIpAdapterInfo = new IP_ADAPTER_INFO();
+	unsigned long stSize = sizeof(IP_ADAPTER_INFO);
+	int nRel = GetAdaptersInfo(pIpAdapterInfo, &stSize);
+
+	if (ERROR_BUFFER_OVERFLOW == nRel)//memory is too small.
+	{
+		delete pIpAdapterInfo;
+		pIpAdapterInfo = (PIP_ADAPTER_INFO)new BYTE[stSize];
+		nRel=GetAdaptersInfo(pIpAdapterInfo,&stSize);
+	}
+
+	//get network interface info success.
+	if (ERROR_SUCCESS == nRel)
+	{
+		while (pIpAdapterInfo)
+		{
+			std::string name = std::string(pIpAdapterInfo->AdapterName, strlen(pIpAdapterInfo->AdapterName));
+			if (name == device) {
+				IP_ADDR_STRING *pIpAddrString =&(pIpAdapterInfo->IpAddressList);
+				if (pIpAddrString) {//use first ip
+					retIp = std::string(pIpAddrString->IpAddress.String, strlen(pIpAddrString->IpAddress.String));
+					break;//end search next ip.
+				}
+			}
+			pIpAdapterInfo = pIpAdapterInfo->Next;
+		}
+	}
+	if (pIpAdapterInfo)
+		delete pIpAdapterInfo;
+#endif
+	return retIp;
+}
+
+std::string SystemApi::system_getDeivceName(std::string ip)
+{
+	std::string deviceName;
+#ifdef _WIN32
+	PIP_ADAPTER_INFO pIpAdapterInfo = new IP_ADAPTER_INFO();
+	unsigned long stSize = sizeof(IP_ADAPTER_INFO);
+	int nRel = GetAdaptersInfo(pIpAdapterInfo, &stSize);
+	if (ERROR_BUFFER_OVERFLOW == nRel)
+	{
+		delete pIpAdapterInfo;
+		pIpAdapterInfo = (PIP_ADAPTER_INFO)new BYTE[stSize];
+		nRel=GetAdaptersInfo(pIpAdapterInfo,&stSize);
+	}
+	if (ERROR_SUCCESS == nRel)
+	{
+		while (pIpAdapterInfo)
+		{
+
+			IP_ADDR_STRING *pIpAddrString = &(pIpAdapterInfo->IpAddressList);
+			do
+			{
+				std::string tip = std::string(pIpAddrString->IpAddress.String, strlen(pIpAddrString->IpAddress.String));
+				if (tip == ip) {
+					deviceName = std::string(pIpAdapterInfo->AdapterName, strlen(pIpAdapterInfo->AdapterName));
+					break;
+				}
+				pIpAddrString = pIpAddrString->Next;
+			} while (pIpAddrString);
+			if (!deviceName.empty())
+				break;
+			pIpAdapterInfo = pIpAdapterInfo->Next;
+		}
+	}
+	if (pIpAdapterInfo)
+	{
+		delete pIpAdapterInfo;
+	}
+#else
+	struct ifreq ifr;
+	struct ifconf ifc;
+	char buf[2048];
+	struct  sockaddr_in my_addr;
+
+	int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+	if (sock == -1) {
+		logs(Logger::ERR, "create socket error(%s)", SystemApi::system_strerror());
+		return deviceName;
+	}
+	ifc.ifc_len = sizeof(buf);
+	ifc.ifc_buf = buf;
+	if (ioctl(sock, SIOCGIFCONF, &ifc) == -1) {
+		logs(Logger::ERR, "ioctl error(%s)", SystemApi::system_strerror());
+		close(sock);
+		return deviceName;
+	}
+
+	struct ifreq* it = ifc.ifc_req;
+	const struct ifreq* const end = it + (ifc.ifc_len / sizeof(struct ifreq));
+
+	for(; it != end; ++it) {
+		strcpy(ifr.ifr_name, it->ifr_name);
+		if (!(ifr.ifr_flags & IFF_LOOPBACK)) {
+			if (ioctl(sock, SIOCGIFADDR, &ifr) < 0)
+			{
+				logs(Logger::ERR, "ioctl error(%s)", SystemApi::system_strerror());
+				close(sock);
+				return deviceName;
+			}
+			char ipaddr[32] = {0};
+			memcpy(&my_addr, &ifr.ifr_addr, sizeof(my_addr));
+			strcpy(ipaddr, inet_ntoa(my_addr.sin_addr));
+			std::string tip = std::string(ipaddr, strlen(ipaddr));
+			if (tip == ip) {
+				deviceName = std::string(it->ifr_name, strlen(it->ifr_name));
+				break;
+			}
+		}
+	}
+	close(sock);
+#endif
+	return deviceName;
+}
+
+int SystemApi::system_getIpList(std::string device, std::list<std::string>& ipList)
+{
+#ifdef _WIN32
+	PIP_ADAPTER_INFO pIpAdapterInfo = new IP_ADAPTER_INFO();
+	unsigned long stSize = sizeof(IP_ADAPTER_INFO);
+	int nRel = GetAdaptersInfo(pIpAdapterInfo, &stSize);
+	if (ERROR_BUFFER_OVERFLOW == nRel)
+	{
+		delete pIpAdapterInfo;
+		pIpAdapterInfo = (PIP_ADAPTER_INFO)new BYTE[stSize];
+		nRel=GetAdaptersInfo(pIpAdapterInfo,&stSize);
+	}
+	if (ERROR_SUCCESS == nRel)
+	{
+		while (pIpAdapterInfo)
+		{
+			std::string tdn = std::string(pIpAdapterInfo->AdapterName, strlen(pIpAdapterInfo->AdapterName));
+			if (tdn == device) {
+				IP_ADDR_STRING *pIpAddrString = &(pIpAdapterInfo->IpAddressList);
+				do
+				{
+					ipList.push_back(std::string(pIpAddrString->IpAddress.String,
+							strlen(pIpAddrString->IpAddress.String)));
+					pIpAddrString = pIpAddrString->Next;
+				} while (pIpAddrString);
+				break;
+			}
+			pIpAdapterInfo = pIpAdapterInfo->Next;
+		}
+	}
+	if (pIpAdapterInfo)
+	{
+		delete pIpAdapterInfo;
+	}
+	if (ERROR_SUCCESS != nRel) {
+		logs(Logger::ERR, "get device name(%s) ip error(%s)", device.c_str(), SystemApi::system_strerror());
+		return -1;
+	}
+#else
+	struct ifreq ifr;
+	struct ifconf ifc;
+	char buf[2048];
+	struct  sockaddr_in my_addr;
+
+	int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+	if (sock == -1) {
+		logs(Logger::ERR, "create socket error(%s)", SystemApi::system_strerror());
+		return -1;
+	}
+	ifc.ifc_len = sizeof(buf);
+	ifc.ifc_buf = buf;
+	if (ioctl(sock, SIOCGIFCONF, &ifc) == -1) {
+		logs(Logger::ERR, "ioctl error(%s)", SystemApi::system_strerror());
+		close(sock);
+		return -1;
+	}
+
+	struct ifreq* it = ifc.ifc_req;
+	const struct ifreq* const end = it + (ifc.ifc_len / sizeof(struct ifreq));
+
+	for(; it != end; ++it) {
+		strcpy(ifr.ifr_name, it->ifr_name);
+		std::string tdn = std::string(it->ifr_name, strlen(it->ifr_name));
+		if (tdn == device) {
+			if (ioctl(sock, SIOCGIFADDR, &ifr) < 0)
+			{
+				logs(Logger::ERR, "ioctl error(%s)", SystemApi::system_strerror());
+				close(sock);
+				return -1;
+			}
+			char ipaddr[32] = {0};
+			memcpy(&my_addr, &ifr.ifr_addr, sizeof(my_addr));
+			strcpy(ipaddr, inet_ntoa(my_addr.sin_addr));
+			ipList.push_back(std::string(ipaddr, strlen(ipaddr)));
+		}
+	}
+	close(sock);
+#endif
+	return 0;
 }

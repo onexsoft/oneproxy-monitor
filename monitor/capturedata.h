@@ -32,6 +32,7 @@
 #include "define.h"
 #include <string>
 #include <pcap.h>
+#include <list>
 using namespace std;
 
 typedef void (*DataHandleFunc)(u_char *, const struct pcap_pkthdr *, const u_char *);
@@ -44,10 +45,12 @@ public:
 	void start_captureData();
 	void stop_captureData();
 	void gen_dumpFile(const struct pcap_pkthdr *header, const u_char *packet);
-#ifdef __WIN32
-	void set_windowsLocalIp(std::string ip);
-	void set_windowDeviceName();
-#endif
+	int get_localIpBaseDeviceName();
+	int get_deviceNameBaseLocalIp();
+	int get_localIpListBaseDeviceName();
+	void add_localIp2List(std::string ip);
+	bool is_localIp(std::string ip);
+	bool isEmpty_localIp();
 private:
 	std::string get_deviceName();
 	std::string get_deviceNameBaseIp(std::string ip);
@@ -61,6 +64,7 @@ private:
 	declare_class_member(std::string, localIp);
 	declare_class_member(pcap_t*, pcapHandle);
 	declare_class_member(pcap_dumper_t*, pdumperHandle);
+	std::list<std::string> localIpList;//one nic maybe have more than one ip.
 };
 
 #endif /* CAPTUREDATA_H_ */

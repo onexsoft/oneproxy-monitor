@@ -16,49 +16,46 @@
  * specific language governing permissions and limitations
  * under the License.
  * 
- * @FileName: supermonitor.h
+ * @FileName: monitortool.h
  * @Description: TODO
  * All rights Reserved, Designed By huih
  * @Company: onexsoft
  * @Author: hui
  * @Version: V1.0
- * @Date: 2017年2月9日 下午3:33:23
+ * @Date: 2017年3月15日 上午11:45:01
  *  
  */
 
-#ifndef SUPERMONITOR_H_
-#define SUPERMONITOR_H_
+#ifndef MONITOR_MONITORTOOL_H_
+#define MONITOR_MONITORTOOL_H_
 
-#include <pcap.h>
-#include <map>
-#include <iostream>
-#include <vector>
+#include <dirent.h>
+#include <limits.h>
 
-#include "monitor_define.h"
-#include "capturedata.h"
-#include "parsedata.h"
-#include "mutexlock.h"
-#include "thread.h"
 #include "define.h"
+#include <string>
+#include <iostream>
+#include "monitor_define.h"
 
-class MonitorManager;
-class SuperMonitor :public Thread{
+class MonitorTool {
 public:
-	SuperMonitor(MonitorManager* mm);
-	virtual ~SuperMonitor();
-	void set_stop();
-	static void monitorData(u_char *arg, const struct pcap_pkthdr *pkthdr, const u_char *packet);
-	static thread_start_func(start);
+	MonitorTool();
+	virtual ~MonitorTool();
+	std::string get_processName(int port, bool isTcp, bool reload);
 private:
-	TaskT* get_taskFromList();
-	void handle_task(TaskT* task);
+	//read progress name and port relation.
+	void load_progress_info();
+#ifdef linux
+	void extract_type_1_socket_inode(const char lname[], long * inode_p);
+	void extract_type_2_socket_inode(const char lname[], long * inode_p);
+#endif
+
+	void linux_load_progress_info_bylsof();
+	int get_inodeBasePort(unsigned short int port, unsigned long& inode, bool isTcp);
+	int get_inodeBasePort(unsigned short int port, unsigned long& inode, char* fileName);
 private:
-	TaskList taskList;
-	MutexLock taskLock;
-	declare_class_member(bool, stop)
-	declare_class_member(IntBoolMap, desPortMap)//this map is not empty, only handle this port.
-	declare_class_member(CaptureData*, captureData)
-	MonitorManager* m_monitorManager;
+	IntStringMap portNameMap;//port and progress name map.
+	ULongStringMap nodeNameMap;//node and progress name map.
 };
 
-#endif /* SUPERMONITOR_H_ */
+#endif /* MONITOR_MONITORTOOL_H_ */

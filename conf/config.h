@@ -253,7 +253,12 @@ class Config: public ConfigBase {
 	declare_class_member(int, listenBackLog)
 	declare_class_member(bool, useMonitor)
 	declare_class_member(std::string, monitorPortClass)//for example: SSProtocol:1344,133;PGProtocol:5432,5433
-
+	declare_class_member(std::string, monitorDeviceName)//for example: eth0, can use linsten addr or device name to point interface.
+	declare_class_member(bool, monitorDumpData)//dump data in monitor.
+	declare_class_member(bool, monitorUserDB)// save data to database.
+	declare_class_member(int, monitorThreadNum)
+	declare_class_member(std::string, monitorCaptureAddress)
+	declare_class_member(bool, monitorAutoGetDesIp)//auto get local ip base on device name
 
 	//global time, update by one second or poll callback.
 	volatile u_uint64 m_globalMillisecondTime;

@@ -28,11 +28,13 @@
 
 #include "parsedata.h"
 #include "protocolbase.h"
+#include "monitormanager.h"
 
-ParseData::ParseData()
+ParseData::ParseData(MonitorManager* mm)
 	: Thread(thread_type_work, "parseData"){
 	// TODO Auto-generated constructor stub
 	this->m_isStop = false;
+	this->m_pMonitorManager = mm;
 	regester_protocol();
 	this->startThread(ParseData::start, this);
 }
@@ -60,7 +62,7 @@ ParseData::~ParseData() {
 void ParseData::regester_protocol() {
 	std::map<int, std::string>& monitorPortClass = config()->get_monitorPortClassMap();
 	std::map<int, std::string>::iterator it = monitorPortClass.begin();
-	for(; it != monitorPortClass.end(); ++it) {
+	for (; it != monitorPortClass.end(); ++it) {
 		this->add_portHandle(it->first, it->second, NULL, NULL);
 	}
 }
@@ -95,8 +97,8 @@ void ParseData::set_stop() {
 thread_start_func(ParseData::start) {
 	ParseData* pd = (ParseData*)args;
 
-	while(pd->m_isStop == false || pd->m_taskDataList.size() > 0) {
-		if (pd->m_taskDataList.size() > 0) {
+	while(pd->m_isStop == false || !pd->m_taskDataList.empty()) {
+		if (!pd->m_taskDataList.empty()) {
 			pd->handle_taskData(pd->get_taskData());
 		} else {
 			pd->m_lock.lock();
@@ -111,7 +113,7 @@ thread_start_func(ParseData::start) {
 TaskDataT* ParseData::get_taskData() {
 	TaskDataT* pd = NULL;
 	this->m_lock.lock();
-	if (this->m_taskDataList.size()) {
+	if (!this->m_taskDataList.empty()) {
 		pd = this->m_taskDataList.front();
 		this->m_taskDataList.pop_front();
 	}
@@ -121,8 +123,19 @@ TaskDataT* ParseData::get_taskData() {
 
 void ParseData::handle_taskData(TaskDataT* taskData) {
 	assert(taskData);
-	this->handle_protocolData(taskData);
 
+	taskData->key.gen_cmpKey();
+	if (taskData->pi.port > 0) {
+		if (config()->get_monitorAutoGetDesIp()){
+			taskData->pi.name = monitorTool.get_processName(
+					taskData->pi.port, taskData->protocol == IPPROTO_TCP,
+					taskData->protocol == IPPROTO_TCP);
+		}
+	}
+
+	if (taskData->data.length() > 0 || taskData->protocol == IPPROTO_TCP){
+		this->handle_protocolData(taskData);
+	}
 	delete taskData;
 	taskData = NULL;
 }
@@ -137,7 +150,7 @@ void ParseData::handle_protocolData(TaskDataT* taskData) {
 	}
 
 	TaskDataKeyConnMap::iterator it = taskDataConnMap.find(tdt->key);
-	if ((tdt->flag == CONN_TCP_FIN) && (tdt->data.length() <= 0)) {//conn closed.
+	if ((tdt->tcpFlags & TH_FIN) && (tdt->data.length() <= 0)) {//conn closed.
 		if (it != taskDataConnMap.end()) {
 			Connection* conn = it->second;
 			taskDataConnMap.erase(it);
@@ -146,7 +159,7 @@ void ParseData::handle_protocolData(TaskDataT* taskData) {
 		}
 		return;
 	}
-	if ((tdt->flag == CONN_TCP_SYN) && (tdt->data.length() <= 0)) {
+	if ((tdt->tcpFlags & TH_SYN) && (tdt->data.length() <= 0)) {
 		return;//no data
 	}
 
@@ -180,22 +193,34 @@ void ParseData::handle_protocolData(TaskDataT* taskData) {
 	}
 
 	//save connection when in tcp.
-	if (tdt->flag != CONN_UDP) {
+	if (tdt->protocol != IPPROTO_UDP) {
 		taskDataConnMap[tdt->key] = conn;
 	}
 
-	//handle data.
-	if (tdt->key.desPort == tdt->pi.port) {//client data packet
-		conn->protocolBase->protocol_front(*conn);
-	} else {//server data packet.
-		conn->protocolBase->protocol_backend(*conn);
+	if ((tdt->tcpFlags != (TH_ACK | TH_FIN)) && (sb->length() > 0)) {
+		//dump data
+		if (tdt->key.desPort == tdt->pi.port) {
+			logs_buf("client =====> server", sb->addr(), sb->length());
+		} else {
+			logs_buf("server =====> client", sb->addr(), sb->length());
+		}
+
+		//handle data.
+		if (tdt->key.desPort == tdt->pi.port) {//client data packet
+			conn->protocolBase->protocol_front(*conn);
+		} else {//server data packet.
+			conn->protocolBase->protocol_backend(*conn);
+		}
+	} else {
+		sb->clear();
 	}
 
 	//close connection
-	if (tdt->flag == CONN_TCP_FIN) {
+	if (tdt->tcpFlags & TH_FIN) {
 		taskDataConnMap.erase(tdt->key);
+
 	}
-	if (tdt->flag == CONN_UDP || tdt->flag == CONN_TCP_FIN) {
+	if (tdt->protocol == IPPROTO_UDP || (tdt->tcpFlags & TH_FIN)) {
 		free_connection(conn);
 		record()->record_closeClientConn();
 	}

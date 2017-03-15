@@ -257,7 +257,9 @@ typedef struct task_data_t{
 	TaskDataKeyT key;
 	ProgressInfo pi;
 	StringBuf data;
-	ConnFlag flag;
+//	ConnFlag flag;
+	u_uint8 tcpFlags;
+	u_uint8 protocol;
 }TaskDataT;
 typedef std::list<TaskDataT*> TaskDataList;
 typedef std::map<TaskDataKeyT, TaskDataList> TaskDataMap;
@@ -267,6 +269,7 @@ typedef std::map<int, bool> IntBoolMap;
 typedef std::map<int, void*> IntVoidMap;
 typedef std::map<std::string, void*> StringVoidMap;
 typedef std::map<int, std::string> IntStringMap;
+typedef std::map<unsigned long, std::string>ULongStringMap;
 
 typedef std::map<TaskDataKeyT, Connection*> TaskDataKeyConnMap;
 #endif /* MONITOR_DEFINE_H_ */

@@ -44,6 +44,10 @@ IOEv::~IOEv() {
 		ev_timer* et = (ev_timer*)it->first;
 		delete et;
 	}
+
+	if (this->m_loop) {
+		ev_loop_destroy(this->m_loop);
+	}
 }
 
 void IOEv::stop_event() {
