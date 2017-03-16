@@ -160,7 +160,7 @@ Config::Config()
 	add_oneproxyConfig("monitorportclass", "SSProtocol:1433;PGProtocol:5432;", &Config::cvtString, &Config::set_monitorPortClass);
 	add_oneproxyConfig("monitordevicename", "", &Config::cvtString, &Config::set_monitorDeviceName);
 	add_oneproxyConfig("monitordumpdata", "false", &Config::cvtBool, &Config::set_monitorDumpData);
-	add_oneproxyConfig("monitoruserdb", "false", &Config::cvtBool, &Config::set_monitorUserDB);
+	add_oneproxyConfig("statsuserdb", "false", &Config::cvtBool, &Config::set_statsUserDB);
 	add_oneproxyConfig("monitorthreadnum", "4", &Config::cvtInt, &Config::set_monitorThreadNum);
 	add_oneproxyConfig("monitorcaptureaddress", "", &Config::cvtString, &Config::set_monitorCaptureAddress);
 	add_oneproxyConfig("monitorautogetdesip", "true", &Config::cvtBool, &Config::set_monitorAutoGetDesIp);
@@ -286,7 +286,7 @@ void Config::print_config()
 	logs(Logger::INFO, "monitorPortClass:%s", this->m_monitorPortClass.c_str());
 	logs(Logger::INFO, "monitorDeviceName:%s", this->m_monitorDeviceName.c_str());
 	logs(Logger::INFO, "monitordumpdata: %d", this->m_monitorDumpData);
-	logs(Logger::INFO, "monitoruserdb:%d", this->m_monitorUserDB);
+	logs(Logger::INFO, "statsuserdb:%d", this->m_statsUserDB);
 	logs(Logger::INFO, "monitorthreadnum:%d", this->m_monitorThreadNum);
 	logs(Logger::INFO, "monitorcaptureaddress:%s", this->m_monitorCaptureAddress.c_str());
 	logs(Logger::INFO, "monitorautogetdesip: %d", this->m_monitorAutoGetDesIp);

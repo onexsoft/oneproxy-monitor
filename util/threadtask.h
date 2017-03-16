@@ -55,6 +55,7 @@ public:
 		this->m_lock.signal_mutexCond();
 		this->m_lock.unlock();
 	}
+	virtual int init_childThread() { return 0;}
 private:
 	static thread_start_func(start);
 private:
@@ -95,6 +96,12 @@ void ThreadTask<T>::handle_taskData() {
 template<class T>
 thread_start_func(ThreadTask<T>::start) {
 	ThreadTask* tt = (ThreadTask*)args;
+
+	if (tt->init_childThread()){
+		logs(Logger::ERR, "init child Thread error");
+		return 0;
+	}
+
 	while(tt->m_isStop == false || !tt->m_dataList.empty()) {
 		if (!tt->m_dataList.empty()) {
 			tt->handle_taskData();

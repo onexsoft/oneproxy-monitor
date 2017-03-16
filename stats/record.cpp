@@ -471,7 +471,7 @@ void Record::record_clientQueryRecvSize(Connection& conn, unsigned int hashCode,
 		clientInfo->part.downDataSize += size;
 	}
 
-	if (conn.connection_hashcode > 0) {
+	if (this->is_save2DB() && conn.connection_hashcode > 0) {
 		ClientInfoT* cit = ClientInfoT::create_instance();
 		cit->connHashCode = conn.connection_hashcode;
 		cit->hashcode = hashCode;
@@ -494,7 +494,7 @@ void Record::record_clientQuerySendSize(Connection& conn, unsigned int hashCode,
 		clientInfo->part.upDataSize += size;
 	}
 
-	if (conn.connection_hashcode > 0) {
+	if (this->is_save2DB() && conn.connection_hashcode > 0) {
 		ClientInfoT* cit = ClientInfoT::create_instance();
 		cit->connHashCode = conn.connection_hashcode;
 		cit->hashcode = hashCode;
@@ -518,7 +518,7 @@ void Record::record_clientQueryAddSql(Connection& conn, ClientQueryInfo* clientI
 		this->clientQueryMapLock.unlock();
 	}
 
-	if (conn.connection_hashcode > 0 && conn.currExecSqlHash > 0) {
+	if (this->is_save2DB() && conn.connection_hashcode > 0 && conn.currExecSqlHash > 0) {
 		ClientSqlRetS* csrs = ClientSqlRetS::create_instance();
 		csrs->conn_hashcode = conn.connection_hashcode;
 		csrs->sql_hashcode = conn.record.sqlInfo.sqlHashCode;
@@ -608,7 +608,7 @@ void Record::record_clientQueryAddNewClient(unsigned int connHashCode, unsigned 
 	clientInfo->latest_connect_time = (u_uint64)SystemApi::system_time();
 	this->clientQueryMapLock.unlock();
 
-	if (connHashCode <= 0)
+	if (!this->is_save2DB() || connHashCode <= 0)
 		return;
 
 
@@ -654,7 +654,7 @@ void Record::record_sqlInfoRecvSize(Connection& conn, unsigned int hashCode,
 		sqlInfo->part.recvSize += size;
 	}
 
-	if (conn.currExecSqlHash > 0) {
+	if (this->is_save2DB() && conn.currExecSqlHash > 0) {
 		SqlExecS *ses = SqlExecS::create_instance();
 		ses->sqlExecHashCode = conn.currExecSqlHash;
 		ses->connHashCode = conn.connection_hashcode;
@@ -683,6 +683,8 @@ void Record::record_sqlInfoAddSql(Connection& conn)
 	}
 	this->sqlInfoMapLock.unlock();
 
+	if (!this->is_save2DB())
+		return;
 
 	SqlInfoS* sis = SqlInfoS::create_instance();
 	sis->execTime = config()->get_globalMillisecondTime();
@@ -728,7 +730,7 @@ void Record::record_sqlInfoExecTran(Connection& conn, unsigned int hashCode, Sql
 		sqlInfo->part.trans++;
 	}
 
-	if (conn.currExecSqlHash > 0) {
+	if (this->is_save2DB() && conn.currExecSqlHash > 0) {
 		SqlExecS *ses = SqlExecS::create_instance();
 		ses->sqlExecHashCode = conn.currExecSqlHash;
 		ses->connHashCode = conn.connection_hashcode;
@@ -757,7 +759,7 @@ void Record::record_sqlInfoRecvResult(Connection& conn, unsigned int rows, SqlIn
 		}
 	}
 
-	if (conn.currExecSqlHash > 0) {
+	if (this->is_save2DB() && conn.currExecSqlHash > 0) {
 		SqlExecS *ses = SqlExecS::create_instance();
 		ses->sqlExecHashCode = conn.currExecSqlHash;
 		ses->connHashCode = conn.connection_hashcode;
@@ -779,7 +781,7 @@ void Record::record_sqlInfoExecFail(Connection& conn, SqlInfo* sqlInfo)
 		sqlInfo->part.fail++;
 	}
 
-	if (conn.currExecSqlHash > 0) {
+	if (this->is_save2DB() && conn.currExecSqlHash > 0) {
 		SqlExecS *ses = SqlExecS::create_instance();
 		ses->sqlExecHashCode = conn.currExecSqlHash;
 		ses->connHashCode = conn.connection_hashcode;
@@ -842,7 +844,7 @@ void Record::record_transInfoEndTrans(unsigned int transHashCode, Connection& co
 	tis->connHashCode = conn.connection_hashcode;
 	tis->transHashCode = transHashCode;
 
-	if (tis->connHashCode > 0) {
+	if (this->is_save2DB() && tis->connHashCode > 0) {
 		DBDataT dt;
 		dt.type = DB_DATA_TYPE_CLIENT_EXEC_TRANS;
 		dt.data = tis;

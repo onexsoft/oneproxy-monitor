@@ -38,6 +38,7 @@ class DBManager : public ThreadTask<DBDataT>{
 public:
 	DBManager();
 	virtual ~DBManager();
+	virtual int init_childThread();
 private:
 	static void start(void* data, void* args);
 	struct tm millisecond2tm(u_uint64 mst);

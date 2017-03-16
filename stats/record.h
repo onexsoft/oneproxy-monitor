@@ -124,6 +124,9 @@ private:
 	~Record() {
 	}
 
+	bool is_save2DB() {
+		return config()->get_statsUserDB();
+	}
 public:
 	u_uint64 sum_clientConn;//从系统启动到目前总共客户端进行了多少次连接
 	u_uint64 sum_currentClientConn;//当前连接到系统中的客户端的数量

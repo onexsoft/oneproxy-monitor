@@ -40,9 +40,17 @@ DBManager::DBManager()
 
 DBManager::~DBManager() {
 	// TODO Auto-generated destructor stub
+	this->joinThread();
 	if (dbBase) {
 		dbBase->destoryDBObject(dbBase);
 	}
+}
+
+int DBManager::init_childThread() {
+	if (config()->get_statsUserDB() && dbBase == NULL) {
+		dbBase = DBBase::createDBObject();
+	}
+	return 0;
 }
 
 void DBManager::start(void* data, void* args) {
@@ -50,12 +58,6 @@ void DBManager::start(void* data, void* args) {
 	assert(args);
 	DBDataT dbt = (DBDataT)(*((DBDataT*)data));
 	DBManager* dbm = (DBManager*)args;
-	if (config()->get_monitorUserDB()) {
-		if (dbm->dbBase == NULL) {
-			dbm->dbBase = DBBase::createDBObject();
-		}
-	}
-
 	switch (dbt.type) {
 	case DB_DATA_TYPE_CLIENT_INFO:
 	{
