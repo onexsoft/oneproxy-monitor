@@ -93,7 +93,7 @@ IMPLEMENT_CVTSTRING_FUNC(DataBaseGroup, cvtString)
 IMPLEMENT_CVTINT_FUNC(DataBaseGroup, cvtInt)
 IMPLEMENT_CVTBOOL_FUNC(DataBaseGroup, cvtBool)
 
-int DataBaseGroup::set_dataBaseGroupVec(std::vector<DataBase>& dbVec,
+int DataBaseGroup::set_dataBaseGroupVec(std::vector<DataBase*>& dbVec,
 		const std::string dbGroupName,
 		std::vector<DataBase*>& dbGVec)
 {
@@ -107,10 +107,10 @@ int DataBaseGroup::set_dataBaseGroupVec(std::vector<DataBase>& dbVec,
 
 			std::string dbLabelName = dbGroupName.substr(pos, curPos - pos);
 			dbLabelName = Tool::stringTrim(dbLabelName);
-			std::vector<DataBase>::iterator it = dbVec.begin();
+			std::vector<DataBase*>::iterator it = dbVec.begin();
 			for(; it != dbVec.end(); ++it) {
-				if (strncasecmp_s(it->get_labelName(), dbLabelName) == 0) {
-					dbGVec.push_back((DataBase*)(&(*it)));
+				if (strncasecmp_s((*it)->get_labelName(), dbLabelName) == 0) {
+					dbGVec.push_back((DataBase*)(*it));
 					break;
 				}
 			}
@@ -199,6 +199,30 @@ Config::Config()
 	this->update_globalTime();
 }
 
+Config::~Config() {
+	{
+		std::vector<DataBaseGroup*>::iterator it =  dbGroupVector.begin();
+		for(; it != dbGroupVector.end();) {
+			DataBaseGroup* pit = *it;
+			++it;
+			if (pit) {
+				delete pit;
+			}
+		}
+	}
+
+	{
+		std::vector<DataBase*>::iterator it =  dbVector.begin();
+		for(; it != dbVector.end();) {
+			DataBase* pit = *it;
+			++it;
+			if (pit) {
+				delete pit;
+			}
+		}
+	}
+}
+
 void Config::add_config(std::vector<ConfigKeyValue>& db, std::string key, std::string dvalue, CVTFunc cf, SetFunc sf)
 {
 	db.push_back(ConfigKeyValue(key, dvalue, cf, sf));
@@ -217,13 +241,13 @@ void Config::default_database()
 {
 	std::list<std::vector<ConfigKeyValue> >::iterator it = this->dbInfoCfg.begin();
 	for (; it != this->dbInfoCfg.end(); ++it) {
-		DataBase db;
+		DataBase* db = new DataBase();
 
 		std::vector<ConfigKeyValue>& dbcfg = (*it);
 		std::vector<ConfigKeyValue>::iterator dbit = dbcfg.begin();
 		for (; dbit != dbcfg.end(); ++dbit) {
 			CVTFunc func = (*dbit).cvtFunc;
-			(db.*func)((*dbit).defaultValue, (*dbit));
+			(db->*func)((*dbit).defaultValue, (*dbit));
 		}
 		this->set_database(db);
 	}
@@ -233,13 +257,13 @@ void Config::default_databaseGroup()
 {
 	std::list<std::vector<ConfigKeyValue> >::iterator it = this->dbGroupCfg.begin();
 	for (; it != this->dbGroupCfg.end(); ++it) {
-		DataBaseGroup dbg;
+		DataBaseGroup* dbg = new DataBaseGroup();
 
 		std::vector<ConfigKeyValue>& dbcfg = (*it);
 		std::vector<ConfigKeyValue>::iterator dbit = dbcfg.begin();
 		for (; dbit != dbcfg.end(); ++dbit) {
 			CVTFunc func = (*dbit).cvtFunc;
-			(dbg.*func)((*dbit).defaultValue, (*dbit));
+			(dbg->*func)((*dbit).defaultValue, (*dbit));
 		}
 		this->set_dataBaseGroup(dbg);
 	}
@@ -291,8 +315,9 @@ void Config::print_config()
 	logs(Logger::INFO, "monitorcaptureaddress:%s", this->m_monitorCaptureAddress.c_str());
 	logs(Logger::INFO, "monitorautogetdesip: %d", this->m_monitorAutoGetDesIp);
 
-	std::vector<DataBase>::iterator it = dbVector.begin();
-	for (; it != dbVector.end(); ++it) {
+	std::vector<DataBase*>::iterator pit = dbVector.begin();
+	for (; pit != dbVector.end(); ++pit) {
+		DataBase* it = (DataBase*)(*pit);
 		logs(Logger::INFO, "database: labelName: %s, addr: %s, port: %d, weightValue: %d, "
 				"connectNum: %d, userName: %s, password: %s, connectNumLimit: %d",
 				it->get_labelName().c_str(), it->get_addr().c_str(), it->get_port(),
@@ -300,8 +325,9 @@ void Config::print_config()
 				it->get_password().c_str(), it->get_connectNumLimit());
 	}
 
-	std::vector<DataBaseGroup>::iterator itg = dbGroupVector.begin();
-	for (; itg != dbGroupVector.end(); ++itg) {
+	std::vector<DataBaseGroup*>::iterator pitg = dbGroupVector.begin();
+	for (; pitg != dbGroupVector.end(); ++pitg) {
+		DataBaseGroup* itg = (DataBaseGroup*)(*pitg);
 		logs(Logger::INFO, "dbGroup: labelName: %s, className: %s, master: %s, slave: %s, "
 				"frontPort: %d, passwordSeparate: %d, readSlave: %d, useConnectionPool: %d,"
 				"clearBackendConnection: %d, usedatabaseconnecttobalace: %d, useMasterAsSalve: %d",
@@ -430,8 +456,9 @@ int Config::handle_config()
 	//forbit PGProtocol, FakeProtocol use passwordSeparate.
 	//std::string pgp = std::string("PGProtocol");
 	std::string fp = std::string("FakeProtocol");
-	std::vector<DataBaseGroup>::iterator it = dbGroupVector.begin();
-	for(; it != dbGroupVector.end(); ++it) {
+	std::vector<DataBaseGroup*>::iterator pit = dbGroupVector.begin();
+	for(; pit != dbGroupVector.end(); ++pit) {
+		DataBaseGroup* it = (DataBaseGroup*)(*pit);
 		if (this->get_useMonitor()) {//use monitor, close all function.
 			it->set_passwordSeparate(false);
 			it->set_readSlave(false);
@@ -461,8 +488,9 @@ int Config::handle_dataBaseGroup()
 {
 	//根据DatabaseGroup中的dbMasterGroup设置dbMasterGroupVec
 	//根据DatabaseGroup中的dbSlaveGroup设置dbSlaveGroupVec
-	std::vector<DataBaseGroup>::iterator it = dbGroupVector.begin();
-	for (; it != dbGroupVector.end(); ++it) {
+	std::vector<DataBaseGroup*>::iterator pit = dbGroupVector.begin();
+	for (; pit != dbGroupVector.end(); ++pit) {
+		DataBaseGroup* it = (*pit);
 		DataBaseGroup::set_dataBaseGroupVec(this->dbVector, it->get_dbMasterGroup(), it->get_dbMasterGroupVec());
 		DataBaseGroup::set_dataBaseGroupVec(this->dbVector, it->get_dbSlaveGroup(), it->get_dbSlaveGroupVec());
 
@@ -480,13 +508,14 @@ int Config::handle_dataBaseGroup()
 	}
 
 	//去掉没有主数据库信息的数据组信息
-	it = dbGroupVector.begin();
-	for (; it != dbGroupVector.end();) {
+	pit = dbGroupVector.begin();
+	for (; pit != dbGroupVector.end();) {
+		DataBaseGroup* it = (DataBaseGroup*)(*pit);
 		if (it->get_dbMasterGroupVec().size() <= 0) {
 			logs(Logger::ERR, "group lable[%s] no master database and remove it error", it->get_labelName().c_str());
-			it = dbGroupVector.erase(it);
+			pit = dbGroupVector.erase(pit);
 		} else {
-			++it;
+			++pit;
 		}
 	}
 	return 0;
@@ -579,8 +608,8 @@ int Config::handle_args(int argc, char* argv[])
 	config()->default_oneproxyConfig();
 
 	if (argc > 1) {
-		DataBase db;
-		DataBaseGroup dbg;
+//		DataBase db;
+//		DataBaseGroup dbg;
 		while ((c = getopt_long(argc, argv, "qvhdVSf:", long_options, &long_idx)) != -1) {
 			switch (c) {
 			case 'v':
@@ -694,20 +723,20 @@ int Config::handle_args(int argc, char* argv[])
 			}
 		}
 
-		const std::string argDataBaseLabelName = std::string("database_args");
-		dbg.set_dbMasterGroup(argDataBaseLabelName);//给参数设置的数据库取一个名称
-		db.set_labelName(argDataBaseLabelName);
-		if (db.is_valid() && dbg.is_valid()) {
-			config()->set_database(db);
-			config()->set_dataBaseGroup(dbg);
-		} else {
+//		const std::string argDataBaseLabelName = std::string("database_args");
+//		dbg.set_dbMasterGroup(argDataBaseLabelName);//给参数设置的数据库取一个名称
+//		db.set_labelName(argDataBaseLabelName);
+//		if (db.is_valid() && dbg.is_valid()) {
+//			config()->set_database(db);
+//			config()->set_dataBaseGroup(dbg);
+//		} else {
 			if (config()->get_databaseSize() <= 0) {
 				config()->default_database();//set default database
 			}
 			if (config()->get_dataBaseGroupSize() <= 0) {
 				config()->default_databaseGroup();
 			}
-		}
+//		}
 	} else {
 		// 寻找配置文件
 		do {
@@ -811,43 +840,43 @@ int Config::loadConfig(std::string filePath)
 		} else if (strncmp_c(sit->pItem, "database") == 0) {//读取数据库信息
 			if (this->dbInfoCfg.size() <= 0) //必须有默认配置，至少一个
 				continue;
-			DataBase db;
+			DataBase* db = new DataBase();
 			std::list<std::vector<ConfigKeyValue> >::iterator dbiter = this->dbInfoCfg.begin();
 			for (; kit != keyList.end(); ++kit) {
-				loadConfigKeyValue(ini, sit->pItem, kit->pItem, false, *dbiter, &db);
+				loadConfigKeyValue(ini, sit->pItem, kit->pItem, false, *dbiter, db);
 			}
-			if (!db.is_valid()) {//无效
+			if (!db->is_valid()) {//无效
 				continue;
 			}
-			if (db.get_labelName().length() <= 0)
-				db.set_labelName(std::string(sit->pItem));
+			if (db->get_labelName().length() <= 0)
+				db->set_labelName(std::string(sit->pItem));
 			this->set_database(db);
 		} else {//读取数据库组信息
 			if (this->dbGroupCfg.size() <= 0) //必须有默认配置，至少一个
 				continue;
-			DataBaseGroup dbg;
+			DataBaseGroup *dbg = new DataBaseGroup();
 			std::list<std::vector<ConfigKeyValue> >::iterator dbgiter = this->dbGroupCfg.begin();
 			for (; kit != keyList.end(); ++kit) {
-				loadConfigKeyValue(ini, sit->pItem, kit->pItem, false, *dbgiter, &dbg);
+				loadConfigKeyValue(ini, sit->pItem, kit->pItem, false, *dbgiter, dbg);
 			}
-			if (!dbg.is_valid()) {//无效
+			if (!dbg->is_valid()) {//无效
 				continue;
 			}
-			if (dbg.get_labelName().length() <= 0)
-				dbg.set_labelName(std::string(sit->pItem));
+			if (dbg->get_labelName().length() <= 0)
+				dbg->set_labelName(std::string(sit->pItem));
 			this->set_dataBaseGroup(dbg);
 		}
 	}
 	return 0;
 }
 
-void Config::set_database(DataBase db) {
+void Config::set_database(DataBase* db) {
 	this->dbVector.push_back(db);
 }
 
 DataBase * Config::get_database() {
 	if (this->dbVector.size()) {
-		return &this->dbVector.at(0);
+		return this->dbVector.at(0);
 	}
 	return NULL;
 }
@@ -860,10 +889,10 @@ DataBase* Config::get_database(unsigned int index) {
 	if (index >= this->get_databaseSize()) {
 		return NULL;
 	}
-	return &this->dbVector[index];
+	return this->dbVector[index];
 }
 
-void Config::set_dataBaseGroup(DataBaseGroup dataBaseGroup)
+void Config::set_dataBaseGroup(DataBaseGroup* dataBaseGroup)
 {
 	this->dbGroupVector.push_back(dataBaseGroup);
 }
@@ -873,7 +902,7 @@ DataBaseGroup* Config::get_dataBaseGroup(unsigned int index)
 	if (index >= this->dbGroupVector.size()) {
 		return NULL;
 	}
-	return &this->dbGroupVector[index];
+	return this->dbGroupVector[index];
 }
 
 unsigned int Config::get_dataBaseGroupSize()

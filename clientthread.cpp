@@ -688,7 +688,7 @@ void ClientThread::read_clientSocket(unsigned int fd, unsigned int events, void*
 	} d;
 	d.l = 0;
 
-	if (SocketUtil::socket_readAllData(ct->get_socketPairReadFd(), sb, 500) < 0) {
+	if (SocketUtil::socket_readAllData(fd, sb, 500) < 0) {
 		logs(Logger::ERR, "read client connection error");
 		return;
 	}
@@ -700,11 +700,10 @@ void ClientThread::read_clientSocket(unsigned int fd, unsigned int events, void*
 			memcpy(&d.l, sb.addr() + sb.get_offset(), pl);
 			sb.set_offset(sb.get_offset() + pl);
 		}
+		ct->add_task(d.ns);
 
 		ct->taskStat.recv_connection();
 		record()->record_threadRecvConn(ct->get_threadId());
-
-		ct->add_task(d.ns);
 	}
 }
 

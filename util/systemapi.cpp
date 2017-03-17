@@ -515,7 +515,6 @@ int SystemApi::system_socketpair(int family, int type, int protocol, int fd[2]) 
 		logs(Logger::ERR, "protocol or family error");
 		return -1;
 	}
-
 	int connector = -1;
 	int acceptor = -1;
 	int linster = -1;
@@ -604,8 +603,8 @@ int SystemApi::system_socketpair(int family, int type, int protocol, int fd[2]) 
 	if (acceptor != -1) {
 		close(acceptor);
 	}
-#endif
 	return -1;
+#endif
 }
 
 void SystemApi::system_showNetworkInterfInfo() {

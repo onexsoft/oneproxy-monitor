@@ -204,7 +204,7 @@ public:
 	}
 
 	//根据dbGroupName中的标签从dbVec中查找数据库信息，把地址保存到dbGVec中
-	static int set_dataBaseGroupVec(std::vector<DataBase>& dbVec,
+	static int set_dataBaseGroupVec(std::vector<DataBase*>& dbVec,
 			const std::string dbGroupName,
 			std::vector<DataBase*>& dbGVec);
 
@@ -270,6 +270,7 @@ class Config: public ConfigBase {
 	declare_cvt_func(cvtBool)
 private:
 	Config();
+	virtual ~Config();
 	void add_config(std::vector<ConfigKeyValue>&, std::string, std::string, CVTFunc, SetFunc);
 	void default_oneproxyConfig();
 	void default_database();
@@ -286,12 +287,12 @@ public:
 	int handle_args(int argc, char* argv[]);
 	int loadConfig(std::string filePath);
 
-	void set_database(DataBase database);
+	void set_database(DataBase* database);
 	DataBase* get_database(unsigned int index);
 	DataBase* get_database();
 	unsigned int get_databaseSize();
 
-	void set_dataBaseGroup(DataBaseGroup dataBaseGroup);
+	void set_dataBaseGroup(DataBaseGroup* dataBaseGroup);
 	DataBaseGroup* get_dataBaseGroup(unsigned int index);
 	unsigned int get_dataBaseGroupSize();
 	u_uint64 get_globalSecondTime();
@@ -299,8 +300,8 @@ public:
 	std::map<int, std::string>& get_monitorPortClassMap();
 
 private:
-	std::vector<DataBase> dbVector;
-	std::vector<DataBaseGroup> dbGroupVector;
+	std::vector<DataBase*> dbVector;
+	std::vector<DataBaseGroup*> dbGroupVector;
 	static MutexLock mutexLock;
 	std::vector<ConfigKeyValue> oneproxyCfg;
 	std::list<std::vector<ConfigKeyValue> > dbInfoCfg;//支持配置多个db信息
