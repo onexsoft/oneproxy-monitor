@@ -41,8 +41,6 @@ int Record::realRecordTime = 10;
 Record* Record::bakRecord = NULL;
 MutexLock Record::bakRecordMutex;
 
-DBManager Record::dbManager;
-
 Record* Record::get_recordInstance()
 {
 	static Record* record = NULL;
@@ -481,7 +479,7 @@ void Record::record_clientQueryRecvSize(Connection& conn, unsigned int hashCode,
 		DBDataT dt;
 		dt.type = DB_DATA_TYPE_CLIENT_INFO_UPDATE;
 		dt.data = cit;
-		Record::dbManager.add_taskData(dt);
+		DBManager::instance()->add_taskData(dt);
 	}
 }
 
@@ -504,7 +502,7 @@ void Record::record_clientQuerySendSize(Connection& conn, unsigned int hashCode,
 		DBDataT dt;
 		dt.type = DB_DATA_TYPE_CLIENT_INFO_UPDATE;
 		dt.data = cit;
-		Record::dbManager.add_taskData(dt);
+		DBManager::instance()->add_taskData(dt);
 	}
 }
 
@@ -527,7 +525,7 @@ void Record::record_clientQueryAddSql(Connection& conn, ClientQueryInfo* clientI
 		DBDataT dt;
 		dt.type = DB_DATA_TYPE_CLIENT_ADD_SQL;
 		dt.data = csrs;
-		Record::dbManager.add_taskData(dt);
+		DBManager::instance()->add_taskData(dt);
 	}
 }
 
@@ -626,8 +624,7 @@ void Record::record_clientQueryAddNewClient(unsigned int connHashCode, unsigned 
 	DBDataT dt;
 	dt.type = DB_DATA_TYPE_CLIENT_INFO;
 	dt.data = cit;
-	Record::dbManager.add_taskData(dt);
-
+	DBManager::instance()->add_taskData(dt);
 }
 
 ClientQueryInfo* Record::record_getClientQueryInfo(unsigned int hashCode)
@@ -662,7 +659,7 @@ void Record::record_sqlInfoRecvSize(Connection& conn, unsigned int hashCode,
 		DBDataT dt;
 		dt.type = DB_DATA_TYPE_CLIENT_EXEC_SQL_UPDATE_DATASIZE;
 		dt.data = ses;
-		Record::dbManager.add_taskData(dt);
+		DBManager::instance()->add_taskData(dt);
 	}
 }
 
@@ -708,7 +705,7 @@ void Record::record_sqlInfoAddSql(Connection& conn)
 	DBDataT dt;
 	dt.type = DB_DATA_TYPE_CLIENT_EXEC_SQL;
 	dt.data = sis;
-	Record::dbManager.add_taskData(dt);
+	DBManager::instance()->add_taskData(dt);
 }
 
 void Record::record_sqlInfoExec(unsigned int hashCode, SqlInfo* sqlInfo)
@@ -738,7 +735,7 @@ void Record::record_sqlInfoExecTran(Connection& conn, unsigned int hashCode, Sql
 		DBDataT dt;
 		dt.type = DB_DATA_TYPE_CLIENT_EXEC_SQL_UPDATE_TRANS;
 		dt.data = ses;
-		Record::dbManager.add_taskData(dt);
+		DBManager::instance()->add_taskData(dt);
 	}
 }
 
@@ -767,7 +764,7 @@ void Record::record_sqlInfoRecvResult(Connection& conn, unsigned int rows, SqlIn
 		DBDataT dt;
 		dt.type = DB_DATA_TYPE_CLIENT_EXEC_SQL_UPDATE_ROWNUM;
 		dt.data = ses;
-		Record::dbManager.add_taskData(dt);
+		DBManager::instance()->add_taskData(dt);
 	}
 }
 
@@ -789,7 +786,7 @@ void Record::record_sqlInfoExecFail(Connection& conn, SqlInfo* sqlInfo)
 		DBDataT dt;
 		dt.type = DB_DATA_TYPE_CLIENT_EXEC_SQL_UPDATE_FAIL;
 		dt.data = ses;
-		Record::dbManager.add_taskData(dt);
+		DBManager::instance()->add_taskData(dt);
 	}
 }
 
@@ -848,7 +845,7 @@ void Record::record_transInfoEndTrans(unsigned int transHashCode, Connection& co
 		DBDataT dt;
 		dt.type = DB_DATA_TYPE_CLIENT_EXEC_TRANS;
 		dt.data = tis;
-		Record::dbManager.add_taskData(dt);
+		DBManager::instance()->add_taskData(dt);
 	} else {
 		tis->free_instance();
 	}

@@ -33,6 +33,7 @@
 
 #define CHECK_OPEN_DB() do{\
 	uif (this->pDB == NULL && DB_OPER_ERROR == this->open_sqlite()) {\
+		logs(Logger::ERR, "open slite error");\
 		return DB_OPER_ERROR;\
 	}\
 }while(0);

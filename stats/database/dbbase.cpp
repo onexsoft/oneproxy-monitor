@@ -27,8 +27,8 @@
  */
 
 #include "dbbase.h"
-
 #include "sqlitedb.h"
+#include "logger.h"
 
 DBBase::DBBase() {
 	// TODO Auto-generated constructor stub
@@ -41,6 +41,10 @@ DBBase::~DBBase() {
 
 DBBase* DBBase::createDBObject() {
 	SqliteDB* sdb = new SqliteDB(std::string("./monitor.db"));
+	if (sdb == NULL) {
+		logs(Logger::ERR, "open sqlite db error");
+		return NULL;
+	}
 	return (DBBase*)sdb;
 }
 

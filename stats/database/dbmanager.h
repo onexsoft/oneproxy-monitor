@@ -35,8 +35,10 @@
 #include "dbbase.h"
 
 class DBManager : public ThreadTask<DBDataT>{
-public:
+private:
 	DBManager();
+public:
+	static DBManager* instance();
 	virtual ~DBManager();
 	virtual int init_childThread();
 private:
@@ -44,6 +46,8 @@ private:
 	struct tm millisecond2tm(u_uint64 mst);
 private:
 	DBBase *dbBase;
+	static DBManager* pDBManager;
+	static MutexLock lock;
 };
 
 #endif /* STATS_DBMANAGER_H_ */

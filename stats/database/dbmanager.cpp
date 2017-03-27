@@ -32,6 +32,9 @@
 #include "tool.h"
 #include "conf/config.h"
 
+DBManager* DBManager::pDBManager = NULL;
+MutexLock DBManager::lock;
+
 DBManager::DBManager()
 	:ThreadTask<DBDataT>(thread_type_db, "dbmanager", DBManager::start, (void*)this){
 	// TODO Auto-generated constructor stub
@@ -44,6 +47,21 @@ DBManager::~DBManager() {
 	if (dbBase) {
 		dbBase->destoryDBObject(dbBase);
 	}
+	if (pDBManager == NULL) {
+		delete pDBManager;
+		pDBManager = NULL;
+	}
+}
+
+DBManager* DBManager::instance() {
+	if (pDBManager == NULL) {
+		DBManager::lock.lock();
+		if (pDBManager == NULL) {
+			pDBManager = new DBManager();
+		}
+		DBManager::lock.unlock();
+	}
+	return pDBManager;
 }
 
 int DBManager::init_childThread() {

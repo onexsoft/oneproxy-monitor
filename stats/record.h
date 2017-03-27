@@ -108,7 +108,7 @@ public:
 			std::string userName, std::string appName, unsigned int hashCode);
 	void record_clientUserAppInfoAddSql(unsigned int hashCode, unsigned int sqlHashCode);
 
-	void record_stop(){Record::dbManager.set_stop();}
+	void record_stop(){DBManager::instance()->set_stop();}
 private:
 	Record() {
 		this->sum_clientConn = 0;
@@ -165,8 +165,6 @@ public:
 	static MutexLock bakRecordMutex;
 	static Record *bakRecord;
 	u_uint64 bakRecordStartTime;
-
-	static DBManager dbManager;
 };
 }
 
