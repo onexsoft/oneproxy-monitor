@@ -40,6 +40,7 @@
 #include "stringbuf.h"
 #include "systemapi.h"
 #include "conf/config.h"
+#include "openssl/ssl.h"
 
 typedef union _addr {
 	struct sockaddr sa;
@@ -102,6 +103,9 @@ public:
 		this->m_dataBase = NULL;
 		this->m_status = SOCKET_STATUS_WORKING_T;
 		this->m_address.clear();
+		this->m_useSSLRead = false;
+		this->m_useSSLWrite =false;
+		this->m_ssl = NULL;
 	}
 	NetworkSocket(std::string address, int port) {
 		this->m_address = address;
@@ -112,6 +116,9 @@ public:
 		this->m_bufPointer = NULL;
 		this->m_dataBase = NULL;
 		this->m_status = SOCKET_STATUS_WORKING_T;
+		this->m_useSSLRead = false;
+		this->m_useSSLWrite = false;
+		this->m_ssl = NULL;
 	}
 	~NetworkSocket() {
 		if (this->m_attachData.pointer != NULL && this->m_attachData.pointer_desFunc != NULL) {
@@ -147,9 +154,16 @@ public:
 	void set_addr(int af, unsigned int port);
 	void set_portAndAddr(unsigned int port, std::string address);
 
+	std::string ssl_error();
 	int read_data();
+	int read_nosslData();
+	int get_sslErrorCode(SSL* ssl);
+	int read_sslData();
 	int read_dataonBlock();
 	int write_data(StringBuf& buf);
+	int write_nosslData(StringBuf& buf);
+	int write_sslData(StringBuf& buf);
+
 	void save_data(StringBuf& buf);
 	void closeSocket(unsigned int fd);
 	void clear_dataBuf();
@@ -181,6 +195,10 @@ private:
 	declare_class_member_co(KVStringMap, connArgsMap)
 	declare_class_member_co(KVStringMap, backendArgsMap)
 	declare_class_member(SocketStatusT, status)
-};
 
+	//add by huih@20170323, for ssl
+	declare_class_member(SSL*, ssl)
+	declare_class_member(bool, useSSLRead)
+	declare_class_member(bool, useSSLWrite)
+};
 #endif /* NETWORKSOCKET_H_ */

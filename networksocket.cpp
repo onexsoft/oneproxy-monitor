@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <openssl/err.h>
 
 int NetworkSocket::addr_pton()
 {
@@ -309,7 +310,26 @@ void NetworkSocket::set_portAndAddr(unsigned int port, std::string address) {
 	set_address(address);
 }
 
-int NetworkSocket::read_data()
+std::string NetworkSocket::ssl_error()
+{
+	std::string error;
+	unsigned long en = ERR_get_error();
+	char szErrMsg[1024] = {0};
+
+	error.append(ERR_error_string(en, szErrMsg));
+
+	return error;
+}
+
+int NetworkSocket::read_data() {
+	if (this->m_useSSLRead) {
+		return this->read_sslData();
+	} else {
+		return this->read_nosslData();
+	}
+}
+
+int NetworkSocket::read_nosslData()
 {
 	unsigned int dataLen = 0;
 	if (system_ioctl(this->m_fd, FIONREAD, (unsigned long int*)&dataLen)) {//fd maybe closed
@@ -334,6 +354,36 @@ int NetworkSocket::read_data()
 		return -1;
 	}
 	this->m_recvData.set_length(this->m_recvData.length() + len);
+	return 0;
+}
+
+int NetworkSocket::get_sslErrorCode(SSL* ssl)
+{
+	assert(ssl != NULL);
+	int icode = -1;
+	int iret = SSL_get_error(ssl, icode);
+	return iret;
+}
+
+int NetworkSocket::read_sslData()
+{
+	assert(this->m_ssl != NULL);
+
+	do {
+		if (this->m_recvData.get_remailAllocLen() <= 64) {
+			this->m_recvData.reallocMem(1024);
+		}
+		int ret = 0;
+		if ((ret = SSL_read(m_ssl, (char*)(m_recvData.addr() + m_recvData.get_length()),
+				m_recvData.get_remailAllocLen())) <= 0) {
+			ret = this->get_sslErrorCode(m_ssl);
+			if (ret == SSL_ERROR_WANT_READ) {
+				return 0;
+			}
+			return -1;
+		}
+		m_recvData.set_length(m_recvData.get_length() + ret);
+	} while(1);
 	return 0;
 }
 
@@ -370,6 +420,15 @@ int NetworkSocket::read_dataonBlock()
 
 int NetworkSocket::write_data(StringBuf& buf)
 {
+	if (this->m_useSSLWrite) {
+		return this->write_sslData(buf);
+	} else {
+		return this->write_nosslData(buf);
+	}
+}
+
+int NetworkSocket::write_nosslData(StringBuf& buf)
+{
 	uif (buf.get_remailLength() <= 0) {
 		return 0;
 	}
@@ -397,6 +456,21 @@ int NetworkSocket::write_data(StringBuf& buf)
 			return -1;
 		}
 		buf.set_offset(buf.get_offset() + len);
+	}
+	return 0;
+}
+
+int NetworkSocket::write_sslData(StringBuf& buf)
+{
+	assert(m_ssl != NULL);
+	uif (SSL_write(m_ssl, (char*)(buf.addr() + buf.get_offset()),
+			buf.get_remailLength()) < 0) {
+		if (this->get_sslErrorCode(m_ssl) == SSL_ERROR_WANT_WRITE) {
+			logs(Logger::WARNING, "ssl write error, need to want write");
+			return 1;
+		}
+		logs(Logger::ERR, "ssl write data error(%s)", ssl_error().c_str());
+		return -1;
 	}
 	return 0;
 }

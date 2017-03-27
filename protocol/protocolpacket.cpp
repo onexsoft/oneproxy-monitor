@@ -39,7 +39,6 @@ const int __const_litte_end = 0x12345678;
 
 ProtocolPacket::ProtocolPacket() {
 	// TODO Auto-generated constructor stub
-
 }
 
 ProtocolPacket::~ProtocolPacket() {
@@ -405,7 +404,6 @@ u_uint64 ProtocolPacket::buffer2Integer(const void* buffer, const unsigned int l
 
 	u_uint64 value = 0;
 	{
-
 		unsigned int i = 0;
 		unsigned int size = len;
 		if (is_littleEndian == false) {
@@ -588,7 +586,7 @@ int ProtocolPacket::set_integerData64(StringBuf& stringBuf, u_uint64 value)
 
 int ProtocolPacket::set_integerDataByLen_LT(StringBuf& stringBuf, unsigned int size, u_uint64 value)
 {
-	stringBuf.reallocMem(stringBuf.get_length() + size);
+	stringBuf.reallocMem(stringBuf.get_length() + size + 1);
 
 	if (set_integerDataByLen_LT(stringBuf, size, value, stringBuf.get_length())) {
 		logs(Logger::ERR, "set integer error, size: %d, length: %d, allocate_len: %d",
